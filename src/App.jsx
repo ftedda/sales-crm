@@ -23,10 +23,13 @@ export default function App() {
     deleteInvestor,
     addEmail,
     updateEmail,
+    deleteEmail,
     addMeeting,
+    updateMeeting,
     deleteMeeting,
     updateMaterial,
     addTermSheet,
+    updateTermSheet,
     deleteTermSheet,
     addWeeklyAction,
     updateWeeklyAction,
@@ -164,12 +167,14 @@ export default function App() {
             data={data}
             addEmail={addEmail}
             updateEmail={updateEmail}
+            deleteEmail={deleteEmail}
           />
         )}
         {activeTab === 'meetings' && (
           <Meetings
             data={data}
             addMeeting={addMeeting}
+            updateMeeting={updateMeeting}
             deleteMeeting={deleteMeeting}
           />
         )}
