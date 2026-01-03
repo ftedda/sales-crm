@@ -445,7 +445,7 @@ export function useData(userId) {
     })
   }, [addActivity])
 
-  // Get unified timeline for an investor (activities + emails + meetings)
+  // Get unified timeline for an investor (activities + emails + meetings + references)
   const getInvestorTimeline = useCallback((investorId, investorFirm) => {
     const activities = data.investorActivities
       .filter(a => a.investor_id === investorId)
@@ -467,6 +467,8 @@ export function useData(userId) {
         description: `${e.type}: ${e.subject || 'No subject'}`,
         timestamp: e.sent_date ? new Date(e.sent_date).toISOString() : e.created_at,
         replied: e.replied,
+        opened: e.opened,
+        clicked: e.clicked,
         source: 'email'
       }))
 
@@ -475,13 +477,26 @@ export function useData(userId) {
       .map(m => ({
         id: `meeting-${m.id}`,
         type: 'meeting',
+        meetingType: m.type,
         description: `${m.type || 'Meeting'}${m.notes ? ': ' + m.notes.substring(0, 100) : ''}`,
         timestamp: m.date ? new Date(m.date).toISOString() : m.created_at,
         followUp: m.follow_up,
+        attendees: [m.attendees_us, m.attendees_them].filter(Boolean).join(' / '),
         source: 'meeting'
       }))
 
-    return [...activities, ...emails, ...meetings]
+    const references = (data.references || [])
+      .filter(r => r.requestedBy === investorFirm)
+      .map(r => ({
+        id: `reference-${r.id}`,
+        type: 'reference',
+        description: `Reference call with ${r.customerName || r.customer_name || 'customer'}${r.contact_name ? ` (${r.contact_name})` : ''}`,
+        timestamp: r.scheduled_date ? new Date(r.scheduled_date).toISOString() : r.created_at,
+        status: r.status,
+        source: 'reference'
+      }))
+
+    return [...activities, ...emails, ...meetings, ...references]
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
   }, [data])
 
