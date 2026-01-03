@@ -119,7 +119,7 @@ Best,
     },
     {
       type: 'Scheduling Push',
-      description: 'Nudge to schedule when initial outreach hasn't gotten a response',
+      description: "Nudge to schedule when initial outreach hasn't gotten a response",
       subject: 'Re: [Company] Series B – scheduling',
       body: `Hi [Name],
 
@@ -269,7 +269,7 @@ Best,
     },
     {
       type: 'Graceful Close',
-      description: 'Professional close for investors who passed or didn't participate',
+      description: "Professional close for investors who passed or didn't participate",
       subject: 'Thank you – [Company] Series B closed',
       body: `Hi [Name],
 
@@ -411,7 +411,7 @@ Best,
     },
     {
       type: 'Asking for References on an Investor',
-      description: 'Request references from founders in an investor's portfolio',
+      description: "Request references from founders in an investor's portfolio",
       subject: 'Quick question about [Fund Name]',
       body: `Hi [Founder Name],
 
