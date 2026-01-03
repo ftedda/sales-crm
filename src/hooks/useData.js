@@ -233,6 +233,15 @@ export function useData(userId) {
     saveData(newData)
   }, [data, saveData, userId])
 
+  const deleteEmail = useCallback(async (id) => {
+    if (supabase && userId) {
+      await supabase.from('emails').delete().eq('id', id)
+    }
+
+    const newData = { ...data, emails: data.emails.filter(e => e.id !== id) }
+    saveData(newData)
+  }, [data, saveData, userId])
+
   const addMeeting = useCallback(async (meeting) => {
     const newMeeting = { ...meeting, id: Date.now(), created_at: new Date().toISOString() }
     
@@ -249,6 +258,18 @@ export function useData(userId) {
     const newData = { ...data, meetings: [...data.meetings, newMeeting] }
     saveData(newData)
     return newMeeting
+  }, [data, saveData, userId])
+
+  const updateMeeting = useCallback(async (id, updates) => {
+    if (supabase && userId) {
+      await supabase.from('meetings').update(updates).eq('id', id)
+    }
+
+    const newData = {
+      ...data,
+      meetings: data.meetings.map(m => m.id === id ? { ...m, ...updates } : m)
+    }
+    saveData(newData)
   }, [data, saveData, userId])
 
   const deleteMeeting = useCallback(async (id) => {
@@ -288,6 +309,18 @@ export function useData(userId) {
     const newData = { ...data, termSheets: [...data.termSheets, newTermSheet] }
     saveData(newData)
     return newTermSheet
+  }, [data, saveData, userId])
+
+  const updateTermSheet = useCallback(async (id, updates) => {
+    if (supabase && userId) {
+      await supabase.from('term_sheets').update(updates).eq('id', id)
+    }
+
+    const newData = {
+      ...data,
+      termSheets: data.termSheets.map(t => t.id === id ? { ...t, ...updates } : t)
+    }
+    saveData(newData)
   }, [data, saveData, userId])
 
   const deleteTermSheet = useCallback(async (id) => {
@@ -448,13 +481,16 @@ export function useData(userId) {
     // Emails
     addEmail,
     updateEmail,
+    deleteEmail,
     // Meetings
     addMeeting,
+    updateMeeting,
     deleteMeeting,
     // Materials
     updateMaterial,
     // Term Sheets
     addTermSheet,
+    updateTermSheet,
     deleteTermSheet,
     // Weekly Actions
     addWeeklyAction,

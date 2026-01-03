@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut } from 'lucide-react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, PieChart } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -9,6 +9,7 @@ import Emails from './components/Emails'
 import Meetings from './components/Meetings'
 import Materials from './components/Materials'
 import TermSheets from './components/TermSheets'
+import CapTable from './components/CapTable'
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = no user
@@ -23,10 +24,13 @@ export default function App() {
     deleteInvestor,
     addEmail,
     updateEmail,
+    deleteEmail,
     addMeeting,
+    updateMeeting,
     deleteMeeting,
     updateMaterial,
     addTermSheet,
+    updateTermSheet,
     deleteTermSheet,
     addWeeklyAction,
     updateWeeklyAction,
@@ -85,6 +89,7 @@ export default function App() {
     { id: 'meetings', label: 'Meetings', icon: Calendar },
     { id: 'materials', label: 'Materials', icon: FileText },
     { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
+    { id: 'captable', label: 'Cap Table', icon: PieChart },
   ]
 
   if (loading) {
@@ -170,12 +175,14 @@ export default function App() {
             data={data}
             addEmail={addEmail}
             updateEmail={updateEmail}
+            deleteEmail={deleteEmail}
           />
         )}
         {activeTab === 'meetings' && (
           <Meetings
             data={data}
             addMeeting={addMeeting}
+            updateMeeting={updateMeeting}
             deleteMeeting={deleteMeeting}
           />
         )}
@@ -191,6 +198,9 @@ export default function App() {
             addTermSheet={addTermSheet}
             deleteTermSheet={deleteTermSheet}
           />
+        )}
+        {activeTab === 'captable' && (
+          <CapTable data={data} />
         )}
       </div>
     </div>

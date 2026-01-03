@@ -188,3 +188,58 @@ create trigger update_investors_updated_at
   before update on public.investors
   for each row
   execute function update_updated_at_column();
+
+-- Cap Table Shareholders (founders and existing investors)
+create table if not exists public.cap_table_shareholders (
+  id bigserial primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  name text not null,
+  shares numeric not null,
+  type text not null default 'Common', -- 'Common' or 'Preferred'
+  category text not null default 'founder', -- 'founder' or 'investor'
+  round text, -- e.g., 'Seed', 'Series A' (for investors)
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Cap Table Option Pool Settings
+create table if not exists public.cap_table_options (
+  id bigserial primary key,
+  user_id uuid references auth.users(id) on delete cascade not null unique,
+  allocated numeric default 0,
+  unallocated numeric default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Enable RLS on cap table tables
+alter table public.cap_table_shareholders enable row level security;
+alter table public.cap_table_options enable row level security;
+
+-- Policies for cap_table_shareholders
+create policy "Users can view own cap_table_shareholders" on public.cap_table_shareholders for select using (auth.uid() = user_id);
+create policy "Users can insert own cap_table_shareholders" on public.cap_table_shareholders for insert with check (auth.uid() = user_id);
+create policy "Users can update own cap_table_shareholders" on public.cap_table_shareholders for update using (auth.uid() = user_id);
+create policy "Users can delete own cap_table_shareholders" on public.cap_table_shareholders for delete using (auth.uid() = user_id);
+
+-- Policies for cap_table_options
+create policy "Users can view own cap_table_options" on public.cap_table_options for select using (auth.uid() = user_id);
+create policy "Users can insert own cap_table_options" on public.cap_table_options for insert with check (auth.uid() = user_id);
+create policy "Users can update own cap_table_options" on public.cap_table_options for update using (auth.uid() = user_id);
+create policy "Users can delete own cap_table_options" on public.cap_table_options for delete using (auth.uid() = user_id);
+
+-- Indexes for cap table tables
+create index if not exists idx_cap_table_shareholders_user_id on public.cap_table_shareholders(user_id);
+create index if not exists idx_cap_table_options_user_id on public.cap_table_options(user_id);
+
+-- Trigger for cap_table_shareholders
+create trigger update_cap_table_shareholders_updated_at
+  before update on public.cap_table_shareholders
+  for each row
+  execute function update_updated_at_column();
+
+-- Trigger for cap_table_options
+create trigger update_cap_table_options_updated_at
+  before update on public.cap_table_options
+  for each row
+  execute function update_updated_at_column();
