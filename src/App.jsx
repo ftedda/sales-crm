@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, Handshake, PieChart, TrendingUp } from 'lucide-react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, HeartHandshake, PieChart, TrendingUp } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -94,7 +94,7 @@ export default function App() {
     { id: 'meetings', label: 'Meetings', icon: Calendar },
     { id: 'materials', label: 'Materials', icon: FileText },
     { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
-    { id: 'references', label: 'References', icon: Handshake },
+    { id: 'references', label: 'References', icon: HeartHandshake },
     { id: 'captable', label: 'Cap Table', icon: PieChart },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   ]
