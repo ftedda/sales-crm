@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, Handshake, PieChart } from 'lucide-react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, Handshake, PieChart, TrendingUp } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -11,6 +11,7 @@ import Materials from './components/Materials'
 import TermSheets from './components/TermSheets'
 import ReferenceCoordination from './components/ReferenceCoordination'
 import CapTable from './components/CapTable'
+import FunnelAnalytics from './components/FunnelAnalytics'
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = no user
@@ -95,6 +96,7 @@ export default function App() {
     { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
     { id: 'references', label: 'References', icon: Handshake },
     { id: 'captable', label: 'Cap Table', icon: PieChart },
+    { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   ]
 
   if (loading) {
@@ -214,6 +216,9 @@ export default function App() {
         )}
         {activeTab === 'captable' && (
           <CapTable data={data} />
+        )}
+        {activeTab === 'analytics' && (
+          <FunnelAnalytics data={data} />
         )}
       </div>
     </div>
