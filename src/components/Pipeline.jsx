@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { PlusCircle, Trash2, Search, X, ChevronDown, Save, Clock, History } from 'lucide-react'
-import InvestorTimeline from './InvestorTimeline'
+import { PlusCircle, Trash2, Search, X, ChevronDown, Save, Clock, History, TrendingUp, Flame, Snowflake, Sun } from 'lucide-react'
+import InvestorTimeline, { getEngagementLevel, formatRelativeTime } from './InvestorTimeline'
 
 const STAGES = ['Target List', 'Contacted', 'Engaged', 'In Diligence', 'Term Sheet', 'Closing', 'Closed', 'Passed']
 const STAGE_COLORS = {
@@ -15,23 +15,13 @@ const STAGE_COLORS = {
 }
 const TIERS = ['1 - Must Have', '2 - Strong Fit', '3 - Opportunistic']
 
-function formatLastTouched(timestamp) {
-  if (!timestamp) return null
-
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now - date
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
-
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`
-
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+const ENGAGEMENT_CONFIG = {
+  high: { icon: Flame, color: 'text-red-500', bg: 'bg-red-50', label: 'Hot' },
+  medium: { icon: TrendingUp, color: 'text-orange-500', bg: 'bg-orange-50', label: 'Active' },
+  warm: { icon: Sun, color: 'text-yellow-600', bg: 'bg-yellow-50', label: 'Warm' },
+  cooling: { icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50', label: 'Cooling' },
+  cold: { icon: Snowflake, color: 'text-slate-400', bg: 'bg-slate-50', label: 'Cold' },
+  none: { icon: Clock, color: 'text-slate-300', bg: 'bg-slate-50', label: 'None' }
 }
 
 export default function Pipeline({ data, addInvestor, updateInvestor, deleteInvestor, addQuickNote, getInvestorTimeline, getLastTouched }) {
@@ -198,14 +188,17 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
                 <th className="text-left px-3 py-2 font-medium text-slate-600 hidden sm:table-cell">Contact</th>
                 <th className="text-left px-3 py-2 font-medium text-slate-600 hidden md:table-cell">Tier</th>
                 <th className="text-left px-3 py-2 font-medium text-slate-600">Stage</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600 hidden lg:table-cell">Last Touch</th>
-                <th className="w-10"></th>
+                <th className="text-left px-3 py-2 font-medium text-slate-600 hidden lg:table-cell">Activity</th>
+                <th className="w-20"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map(inv => {
                 const lastTouched = getLastTouched ? getLastTouched(inv.id, inv.firm) : null
-                const lastTouchedFormatted = formatLastTouched(lastTouched)
+                const timeline = getInvestorTimeline ? getInvestorTimeline(inv.id, inv.firm) : []
+                const engagement = getEngagementLevel(timeline)
+                const engagementConfig = ENGAGEMENT_CONFIG[engagement.level]
+                const EngagementIcon = engagementConfig.icon
 
                 return (
                   <React.Fragment key={inv.id}>
@@ -233,16 +226,38 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
                           {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td className="px-3 py-2 text-slate-500 hidden lg:table-cell">
-                        {lastTouchedFormatted && (
-                          <div className="flex items-center space-x-1 text-xs">
-                            <Clock size={12} />
-                            <span>{lastTouchedFormatted}</span>
+                      <td className="px-3 py-2 hidden lg:table-cell">
+                        <div className="flex items-center gap-2">
+                          {/* Engagement indicator */}
+                          <div
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${engagementConfig.bg}`}
+                            title={`${engagementConfig.label}${lastTouched ? ` - Last: ${formatRelativeTime(lastTouched)}` : ''}`}
+                          >
+                            <EngagementIcon size={12} className={engagementConfig.color} />
+                            <span className={`text-xs font-medium ${engagementConfig.color}`}>
+                              {engagementConfig.label}
+                            </span>
                           </div>
-                        )}
+                          {/* Activity count */}
+                          {timeline.length > 0 && (
+                            <span className="text-xs text-slate-400">
+                              {timeline.length}
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-3 py-2">
-                        <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedRow === inv.id ? 'rotate-180' : ''}`} />
+                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-1">
+                          {/* Timeline button */}
+                          <button
+                            onClick={() => setSelectedInvestor(inv)}
+                            className="p-1.5 rounded hover:bg-slate-100 transition-colors group"
+                            title="View timeline"
+                          >
+                            <History size={14} className="text-slate-400 group-hover:text-slate-600" />
+                          </button>
+                          <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedRow === inv.id ? 'rotate-180' : ''}`} />
+                        </div>
                       </td>
                     </tr>
                     {expandedRow === inv.id && (
