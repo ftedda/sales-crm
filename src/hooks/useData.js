@@ -21,6 +21,7 @@ const defaultData = {
   ],
   termSheets: [],
   weeklyActions: [],
+  references: [],
   investorActivities: []
 }
 
@@ -58,13 +59,14 @@ export function useData(userId) {
       if (supabase && userId) {
         try {
           // Load from Supabase
-          const [investors, emails, meetings, materials, termSheets, weeklyActions, investorActivities] = await Promise.all([
+          const [investors, emails, meetings, materials, termSheets, weeklyActions, references, investorActivities] = await Promise.all([
             supabase.from('investors').select('*').eq('user_id', userId),
             supabase.from('emails').select('*').eq('user_id', userId),
             supabase.from('meetings').select('*').eq('user_id', userId),
             supabase.from('materials').select('*').eq('user_id', userId),
             supabase.from('term_sheets').select('*').eq('user_id', userId),
             supabase.from('weekly_actions').select('*').eq('user_id', userId),
+            supabase.from('references').select('*').eq('user_id', userId),
             supabase.from('investor_activities').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
           ])
 
@@ -75,6 +77,7 @@ export function useData(userId) {
             materials: materials.data?.length ? materials.data : defaultData.materials,
             termSheets: termSheets.data || [],
             weeklyActions: weeklyActions.data || [],
+            references: references.data || [],
             investorActivities: investorActivities.data || []
           })
         } catch (e) {
@@ -205,14 +208,14 @@ export function useData(userId) {
 
   const addEmail = useCallback(async (email) => {
     const newEmail = { ...email, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('emails')
         .insert({ ...newEmail, user_id: userId })
         .select()
         .single()
-      
+
       if (!error) newEmail.id = inserted.id
     }
 
@@ -244,14 +247,14 @@ export function useData(userId) {
 
   const addMeeting = useCallback(async (meeting) => {
     const newMeeting = { ...meeting, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('meetings')
         .insert({ ...newMeeting, user_id: userId })
         .select()
         .single()
-      
+
       if (!error) newMeeting.id = inserted.id
     }
 
@@ -295,14 +298,14 @@ export function useData(userId) {
 
   const addTermSheet = useCallback(async (termSheet) => {
     const newTermSheet = { ...termSheet, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('term_sheets')
         .insert({ ...newTermSheet, user_id: userId })
         .select()
         .single()
-      
+
       if (!error) newTermSheet.id = inserted.id
     }
 
@@ -334,14 +337,14 @@ export function useData(userId) {
 
   const addWeeklyAction = useCallback(async (action) => {
     const newAction = { ...action, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('weekly_actions')
         .insert({ ...newAction, user_id: userId })
         .select()
         .single()
-      
+
       if (!error) newAction.id = inserted.id
     }
 
@@ -368,6 +371,46 @@ export function useData(userId) {
     }
 
     const newData = { ...data, weeklyActions: data.weeklyActions.filter(a => a.id !== id) }
+    saveData(newData)
+  }, [data, saveData, userId])
+
+  // References CRUD
+  const addReference = useCallback(async (reference) => {
+    const newReference = { ...reference, id: Date.now(), created_at: new Date().toISOString() }
+
+    if (supabase && userId) {
+      const { data: inserted, error } = await supabase
+        .from('references')
+        .insert({ ...newReference, user_id: userId })
+        .select()
+        .single()
+
+      if (!error) newReference.id = inserted.id
+    }
+
+    const newData = { ...data, references: [...data.references, newReference] }
+    saveData(newData)
+    return newReference
+  }, [data, saveData, userId])
+
+  const updateReference = useCallback(async (id, updates) => {
+    if (supabase && userId) {
+      await supabase.from('references').update(updates).eq('id', id)
+    }
+
+    const newData = {
+      ...data,
+      references: data.references.map(r => r.id === id ? { ...r, ...updates } : r)
+    }
+    saveData(newData)
+  }, [data, saveData, userId])
+
+  const deleteReference = useCallback(async (id) => {
+    if (supabase && userId) {
+      await supabase.from('references').delete().eq('id', id)
+    }
+
+    const newData = { ...data, references: data.references.filter(r => r.id !== id) }
     saveData(newData)
   }, [data, saveData, userId])
 
@@ -496,6 +539,10 @@ export function useData(userId) {
     addWeeklyAction,
     updateWeeklyAction,
     deleteWeeklyAction,
+    // References
+    addReference,
+    updateReference,
+    deleteReference,
     // Investor Activities & Timeline
     addActivity,
     addQuickNote,
