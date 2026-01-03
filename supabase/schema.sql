@@ -106,6 +106,19 @@ create table if not exists public.weekly_actions (
   created_at timestamptz default now()
 );
 
+-- Investor Activities table (for timeline tracking)
+create table if not exists public.investor_activities (
+  id bigserial primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  investor_id bigint references public.investors(id) on delete cascade not null,
+  investor_firm text not null,
+  activity_type text not null, -- 'stage_change', 'note', 'email', 'meeting', 'created'
+  description text not null,
+  old_value text,
+  new_value text,
+  created_at timestamptz default now()
+);
+
 -- Enable Row Level Security on all tables
 alter table public.investors enable row level security;
 alter table public.emails enable row level security;
@@ -113,6 +126,7 @@ alter table public.meetings enable row level security;
 alter table public.materials enable row level security;
 alter table public.term_sheets enable row level security;
 alter table public.weekly_actions enable row level security;
+alter table public.investor_activities enable row level security;
 
 -- Create policies - users can only see/edit their own data
 create policy "Users can view own investors" on public.investors for select using (auth.uid() = user_id);
@@ -145,6 +159,11 @@ create policy "Users can insert own weekly_actions" on public.weekly_actions for
 create policy "Users can update own weekly_actions" on public.weekly_actions for update using (auth.uid() = user_id);
 create policy "Users can delete own weekly_actions" on public.weekly_actions for delete using (auth.uid() = user_id);
 
+create policy "Users can view own investor_activities" on public.investor_activities for select using (auth.uid() = user_id);
+create policy "Users can insert own investor_activities" on public.investor_activities for insert with check (auth.uid() = user_id);
+create policy "Users can update own investor_activities" on public.investor_activities for update using (auth.uid() = user_id);
+create policy "Users can delete own investor_activities" on public.investor_activities for delete using (auth.uid() = user_id);
+
 -- Create indexes for better performance
 create index if not exists idx_investors_user_id on public.investors(user_id);
 create index if not exists idx_emails_user_id on public.emails(user_id);
@@ -152,6 +171,8 @@ create index if not exists idx_meetings_user_id on public.meetings(user_id);
 create index if not exists idx_materials_user_id on public.materials(user_id);
 create index if not exists idx_term_sheets_user_id on public.term_sheets(user_id);
 create index if not exists idx_weekly_actions_user_id on public.weekly_actions(user_id);
+create index if not exists idx_investor_activities_user_id on public.investor_activities(user_id);
+create index if not exists idx_investor_activities_investor_id on public.investor_activities(investor_id);
 
 -- Function to update updated_at timestamp
 create or replace function update_updated_at_column()

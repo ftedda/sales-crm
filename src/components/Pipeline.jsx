@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { PlusCircle, Trash2, Search, X, ChevronDown, Save } from 'lucide-react'
+import { PlusCircle, Trash2, Search, X, ChevronDown, Save, Clock, History } from 'lucide-react'
+import InvestorTimeline from './InvestorTimeline'
 
 const STAGES = ['Target List', 'Contacted', 'Engaged', 'In Diligence', 'Term Sheet', 'Closing', 'Closed', 'Passed']
 const STAGE_COLORS = {
@@ -14,7 +15,26 @@ const STAGE_COLORS = {
 }
 const TIERS = ['1 - Must Have', '2 - Strong Fit', '3 - Opportunistic']
 
-export default function Pipeline({ data, addInvestor, updateInvestor, deleteInvestor }) {
+function formatLastTouched(timestamp) {
+  if (!timestamp) return null
+
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffMs = now - date
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+export default function Pipeline({ data, addInvestor, updateInvestor, deleteInvestor, addQuickNote, getInvestorTimeline, getLastTouched }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ firm: '', contact: '', email: '', tier: '2 - Strong Fit', stage: 'Target List', next_action: '', notes: '' })
   const [stageFilter, setStageFilter] = useState('all')
@@ -22,6 +42,7 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
   const [search, setSearch] = useState('')
   const [expandedRow, setExpandedRow] = useState(null)
   const [editData, setEditData] = useState({})
+  const [selectedInvestor, setSelectedInvestor] = useState(null)
 
   const handleSubmit = async () => {
     if (!form.firm) return
@@ -177,162 +198,180 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
                 <th className="text-left px-3 py-2 font-medium text-slate-600 hidden sm:table-cell">Contact</th>
                 <th className="text-left px-3 py-2 font-medium text-slate-600 hidden md:table-cell">Tier</th>
                 <th className="text-left px-3 py-2 font-medium text-slate-600">Stage</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600 hidden lg:table-cell">Next Action</th>
+                <th className="text-left px-3 py-2 font-medium text-slate-600 hidden lg:table-cell">Last Touch</th>
                 <th className="w-10"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map(inv => (
-                <React.Fragment key={inv.id}>
-                  <tr
-                    className="hover:bg-slate-50 cursor-pointer"
-                    onClick={() => handleExpand(inv)}
-                  >
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-slate-800">{inv.firm}</div>
-                      <div className="text-xs text-slate-400 sm:hidden">{inv.contact}</div>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600 hidden sm:table-cell">
-                      <div>{inv.contact}</div>
-                      <div className="text-xs text-slate-400">{inv.email}</div>
-                    </td>
-                    <td className="px-3 py-2 hidden md:table-cell">
-                      <span className="text-xs text-slate-500">T{inv.tier?.charAt(0)}</span>
-                    </td>
-                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                      <select
-                        value={inv.stage}
-                        onChange={e => updateInvestor(inv.id, { stage: e.target.value })}
-                        className={`${STAGE_COLORS[inv.stage]} px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer`}
-                      >
-                        {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600 hidden lg:table-cell max-w-48 truncate">
-                      {inv.next_action}
-                    </td>
-                    <td className="px-3 py-2">
-                      <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedRow === inv.id ? 'rotate-180' : ''}`} />
-                    </td>
-                  </tr>
-                  {expandedRow === inv.id && (
-                    <tr className="bg-slate-50">
-                      <td colSpan={6} className="px-3 py-3">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                          <div>
-                            <label className="text-slate-500 block mb-1">Firm</label>
-                            <input
-                              value={editData.firm || ''}
-                              onChange={e => handleEditChange('firm', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            />
+              {filtered.map(inv => {
+                const lastTouched = getLastTouched ? getLastTouched(inv.id, inv.firm) : null
+                const lastTouchedFormatted = formatLastTouched(lastTouched)
+
+                return (
+                  <React.Fragment key={inv.id}>
+                    <tr
+                      className="hover:bg-slate-50 cursor-pointer"
+                      onClick={() => handleExpand(inv)}
+                    >
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-800">{inv.firm}</div>
+                        <div className="text-xs text-slate-400 sm:hidden">{inv.contact}</div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-600 hidden sm:table-cell">
+                        <div>{inv.contact}</div>
+                        <div className="text-xs text-slate-400">{inv.email}</div>
+                      </td>
+                      <td className="px-3 py-2 hidden md:table-cell">
+                        <span className="text-xs text-slate-500">T{inv.tier?.charAt(0)}</span>
+                      </td>
+                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                        <select
+                          value={inv.stage}
+                          onChange={e => updateInvestor(inv.id, { stage: e.target.value })}
+                          className={`${STAGE_COLORS[inv.stage]} px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer`}
+                        >
+                          {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2 text-slate-500 hidden lg:table-cell">
+                        {lastTouchedFormatted && (
+                          <div className="flex items-center space-x-1 text-xs">
+                            <Clock size={12} />
+                            <span>{lastTouchedFormatted}</span>
                           </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Contact</label>
-                            <input
-                              value={editData.contact || ''}
-                              onChange={e => handleEditChange('contact', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Email</label>
-                            <input
-                              value={editData.email || ''}
-                              onChange={e => handleEditChange('email', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Phone</label>
-                            <input
-                              value={editData.phone || ''}
-                              onChange={e => handleEditChange('phone', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Tier</label>
-                            <select
-                              value={editData.tier || ''}
-                              onChange={e => handleEditChange('tier', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            >
-                              {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Stage</label>
-                            <select
-                              value={editData.stage || ''}
-                              onChange={e => handleEditChange('stage', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            >
-                              {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Intro Source</label>
-                            <input
-                              value={editData.intro_source || ''}
-                              onChange={e => handleEditChange('intro_source', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Next Action</label>
-                            <input
-                              value={editData.next_action || ''}
-                              onChange={e => handleEditChange('next_action', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Next Action Date</label>
-                            <input
-                              type="date"
-                              value={editData.next_action_date || ''}
-                              onChange={e => handleEditChange('next_action_date', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-2">
-                          <label className="text-slate-500 block mb-1 text-xs">Notes</label>
-                          <textarea
-                            value={editData.notes || ''}
-                            onChange={e => handleEditChange('notes', e.target.value)}
-                            className="w-full border rounded px-2 py-1.5 text-xs"
-                            rows={2}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between mt-3">
-                          <button
-                            onClick={() => handleDelete(inv.id)}
-                            className="flex items-center text-red-500 hover:text-red-700 text-xs"
-                          >
-                            <Trash2 size={12} className="mr-1" /> Delete
-                          </button>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => { setExpandedRow(null); setEditData({}) }}
-                              className="px-3 py-1.5 text-xs bg-slate-100 rounded hover:bg-slate-200"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handleSave}
-                              className="flex items-center px-3 py-1.5 text-xs bg-slate-800 text-white rounded hover:bg-slate-700"
-                            >
-                              <Save size={12} className="mr-1" /> Save
-                            </button>
-                          </div>
-                        </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedRow === inv.id ? 'rotate-180' : ''}`} />
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+                    {expandedRow === inv.id && (
+                      <tr className="bg-slate-50">
+                        <td colSpan={6} className="px-3 py-3">
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                            <div>
+                              <label className="text-slate-500 block mb-1">Firm</label>
+                              <input
+                                value={editData.firm || ''}
+                                onChange={e => handleEditChange('firm', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Contact</label>
+                              <input
+                                value={editData.contact || ''}
+                                onChange={e => handleEditChange('contact', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Email</label>
+                              <input
+                                value={editData.email || ''}
+                                onChange={e => handleEditChange('email', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Phone</label>
+                              <input
+                                value={editData.phone || ''}
+                                onChange={e => handleEditChange('phone', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Tier</label>
+                              <select
+                                value={editData.tier || ''}
+                                onChange={e => handleEditChange('tier', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              >
+                                {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Stage</label>
+                              <select
+                                value={editData.stage || ''}
+                                onChange={e => handleEditChange('stage', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              >
+                                {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Intro Source</label>
+                              <input
+                                value={editData.intro_source || ''}
+                                onChange={e => handleEditChange('intro_source', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Next Action</label>
+                              <input
+                                value={editData.next_action || ''}
+                                onChange={e => handleEditChange('next_action', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Next Action Date</label>
+                              <input
+                                type="date"
+                                value={editData.next_action_date || ''}
+                                onChange={e => handleEditChange('next_action_date', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-2">
+                            <label className="text-slate-500 block mb-1 text-xs">Notes</label>
+                            <textarea
+                              value={editData.notes || ''}
+                              onChange={e => handleEditChange('notes', e.target.value)}
+                              className="w-full border rounded px-2 py-1.5 text-xs"
+                              rows={2}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between mt-3">
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => handleDelete(inv.id)}
+                                className="flex items-center text-red-500 hover:text-red-700 text-xs"
+                              >
+                                <Trash2 size={12} className="mr-1" /> Delete
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedInvestor(inv) }}
+                                className="flex items-center text-slate-500 hover:text-slate-700 text-xs"
+                              >
+                                <History size={12} className="mr-1" /> Timeline
+                              </button>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => { setExpandedRow(null); setEditData({}) }}
+                                className="px-3 py-1.5 text-xs bg-slate-100 rounded hover:bg-slate-200"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleSave}
+                                className="flex items-center px-3 py-1.5 text-xs bg-slate-800 text-white rounded hover:bg-slate-700"
+                              >
+                                <Save size={12} className="mr-1" /> Save
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -340,6 +379,21 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
           <p className="text-center py-8 text-slate-400 text-sm">No investors in this view</p>
         )}
       </div>
+
+      {/* Timeline Modal */}
+      {selectedInvestor && (
+        <InvestorTimeline
+          investor={selectedInvestor}
+          timeline={getInvestorTimeline ? getInvestorTimeline(selectedInvestor.id, selectedInvestor.firm) : []}
+          lastTouched={getLastTouched ? getLastTouched(selectedInvestor.id, selectedInvestor.firm) : null}
+          onClose={() => setSelectedInvestor(null)}
+          onAddNote={async (note) => {
+            if (addQuickNote) {
+              await addQuickNote(selectedInvestor.id, selectedInvestor.firm, note)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
