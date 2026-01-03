@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, Handshake } from 'lucide-react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, Handshake, PieChart } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -10,6 +10,7 @@ import Meetings from './components/Meetings'
 import Materials from './components/Materials'
 import TermSheets from './components/TermSheets'
 import ReferenceCoordination from './components/ReferenceCoordination'
+import CapTable from './components/CapTable'
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = no user
@@ -24,10 +25,13 @@ export default function App() {
     deleteInvestor,
     addEmail,
     updateEmail,
+    deleteEmail,
     addMeeting,
+    updateMeeting,
     deleteMeeting,
     updateMaterial,
     addTermSheet,
+    updateTermSheet,
     deleteTermSheet,
     addWeeklyAction,
     updateWeeklyAction,
@@ -35,6 +39,9 @@ export default function App() {
     addReference,
     updateReference,
     deleteReference,
+    addQuickNote,
+    getInvestorTimeline,
+    getLastTouched,
     exportToCSV
   } = useData(user?.id)
 
@@ -87,6 +94,7 @@ export default function App() {
     { id: 'materials', label: 'Materials', icon: FileText },
     { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
     { id: 'references', label: 'References', icon: Handshake },
+    { id: 'captable', label: 'Cap Table', icon: PieChart },
   ]
 
   if (loading) {
@@ -162,6 +170,9 @@ export default function App() {
             addInvestor={addInvestor}
             updateInvestor={updateInvestor}
             deleteInvestor={deleteInvestor}
+            addQuickNote={addQuickNote}
+            getInvestorTimeline={getInvestorTimeline}
+            getLastTouched={getLastTouched}
           />
         )}
         {activeTab === 'emails' && (
@@ -169,12 +180,14 @@ export default function App() {
             data={data}
             addEmail={addEmail}
             updateEmail={updateEmail}
+            deleteEmail={deleteEmail}
           />
         )}
         {activeTab === 'meetings' && (
           <Meetings
             data={data}
             addMeeting={addMeeting}
+            updateMeeting={updateMeeting}
             deleteMeeting={deleteMeeting}
           />
         )}
@@ -198,6 +211,9 @@ export default function App() {
             updateReference={updateReference}
             deleteReference={deleteReference}
           />
+        )}
+        {activeTab === 'captable' && (
+          <CapTable data={data} />
         )}
       </div>
     </div>
