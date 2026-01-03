@@ -31,6 +31,9 @@ export default function App() {
     addWeeklyAction,
     updateWeeklyAction,
     deleteWeeklyAction,
+    addQuickNote,
+    getInvestorTimeline,
+    getLastTouched,
     exportToCSV
   } = useData(user?.id)
 
@@ -157,6 +160,9 @@ export default function App() {
             addInvestor={addInvestor}
             updateInvestor={updateInvestor}
             deleteInvestor={deleteInvestor}
+            addQuickNote={addQuickNote}
+            getInvestorTimeline={getInvestorTimeline}
+            getLastTouched={getLastTouched}
           />
         )}
         {activeTab === 'emails' && (
