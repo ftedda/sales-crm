@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, TrendingUp } from 'lucide-react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, Handshake, PieChart, TrendingUp } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -9,6 +9,8 @@ import Emails from './components/Emails'
 import Meetings from './components/Meetings'
 import Materials from './components/Materials'
 import TermSheets from './components/TermSheets'
+import ReferenceCoordination from './components/ReferenceCoordination'
+import CapTable from './components/CapTable'
 import FunnelAnalytics from './components/FunnelAnalytics'
 
 export default function App() {
@@ -24,14 +26,23 @@ export default function App() {
     deleteInvestor,
     addEmail,
     updateEmail,
+    deleteEmail,
     addMeeting,
+    updateMeeting,
     deleteMeeting,
     updateMaterial,
     addTermSheet,
+    updateTermSheet,
     deleteTermSheet,
     addWeeklyAction,
     updateWeeklyAction,
     deleteWeeklyAction,
+    addReference,
+    updateReference,
+    deleteReference,
+    addQuickNote,
+    getInvestorTimeline,
+    getLastTouched,
     exportToCSV
   } = useData(user?.id)
 
@@ -83,6 +94,8 @@ export default function App() {
     { id: 'meetings', label: 'Meetings', icon: Calendar },
     { id: 'materials', label: 'Materials', icon: FileText },
     { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
+    { id: 'references', label: 'References', icon: Handshake },
+    { id: 'captable', label: 'Cap Table', icon: PieChart },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   ]
 
@@ -159,6 +172,9 @@ export default function App() {
             addInvestor={addInvestor}
             updateInvestor={updateInvestor}
             deleteInvestor={deleteInvestor}
+            addQuickNote={addQuickNote}
+            getInvestorTimeline={getInvestorTimeline}
+            getLastTouched={getLastTouched}
           />
         )}
         {activeTab === 'emails' && (
@@ -166,12 +182,14 @@ export default function App() {
             data={data}
             addEmail={addEmail}
             updateEmail={updateEmail}
+            deleteEmail={deleteEmail}
           />
         )}
         {activeTab === 'meetings' && (
           <Meetings
             data={data}
             addMeeting={addMeeting}
+            updateMeeting={updateMeeting}
             deleteMeeting={deleteMeeting}
           />
         )}
@@ -187,6 +205,17 @@ export default function App() {
             addTermSheet={addTermSheet}
             deleteTermSheet={deleteTermSheet}
           />
+        )}
+        {activeTab === 'references' && (
+          <ReferenceCoordination
+            data={data}
+            addReference={addReference}
+            updateReference={updateReference}
+            deleteReference={deleteReference}
+          />
+        )}
+        {activeTab === 'captable' && (
+          <CapTable data={data} />
         )}
         {activeTab === 'analytics' && (
           <FunnelAnalytics data={data} />

@@ -20,7 +20,9 @@ const defaultData = {
     { id: 12, name: 'Legal Structure & Agreements', tier: '3', status: 'Not Started', owner: '' },
   ],
   termSheets: [],
-  weeklyActions: []
+  weeklyActions: [],
+  references: [],
+  investorActivities: []
 }
 
 // Local storage fallback
@@ -57,13 +59,15 @@ export function useData(userId) {
       if (supabase && userId) {
         try {
           // Load from Supabase
-          const [investors, emails, meetings, materials, termSheets, weeklyActions] = await Promise.all([
+          const [investors, emails, meetings, materials, termSheets, weeklyActions, references, investorActivities] = await Promise.all([
             supabase.from('investors').select('*').eq('user_id', userId),
             supabase.from('emails').select('*').eq('user_id', userId),
             supabase.from('meetings').select('*').eq('user_id', userId),
             supabase.from('materials').select('*').eq('user_id', userId),
             supabase.from('term_sheets').select('*').eq('user_id', userId),
             supabase.from('weekly_actions').select('*').eq('user_id', userId),
+            supabase.from('references').select('*').eq('user_id', userId),
+            supabase.from('investor_activities').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
           ])
 
           setData({
@@ -72,7 +76,9 @@ export function useData(userId) {
             meetings: meetings.data || [],
             materials: materials.data?.length ? materials.data : defaultData.materials,
             termSheets: termSheets.data || [],
-            weeklyActions: weeklyActions.data || []
+            weeklyActions: weeklyActions.data || [],
+            references: references.data || [],
+            investorActivities: investorActivities.data || []
           })
         } catch (e) {
           console.error('Supabase load error:', e)
@@ -109,37 +115,87 @@ export function useData(userId) {
     saveToLocalStorage(newData)
   }, [userId])
 
+  // Internal function to add activity without triggering state update loop
+  const addActivityInternal = useCallback(async (activity, currentData) => {
+    const newActivity = { ...activity, id: Date.now(), created_at: new Date().toISOString() }
+
+    if (supabase && userId) {
+      const { data: inserted, error } = await supabase
+        .from('investor_activities')
+        .insert({ ...newActivity, user_id: userId })
+        .select()
+        .single()
+
+      if (!error && inserted) newActivity.id = inserted.id
+    }
+
+    return {
+      newActivity,
+      investorActivities: [newActivity, ...currentData.investorActivities]
+    }
+  }, [userId])
+
   // CRUD operations for each entity
   const addInvestor = useCallback(async (investor) => {
     const newInvestor = { ...investor, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('investors')
         .insert({ ...newInvestor, user_id: userId })
         .select()
         .single()
-      
+
       if (error) throw error
       newInvestor.id = inserted.id
     }
 
-    const newData = { ...data, investors: [...data.investors, newInvestor] }
+    // Log the created activity
+    const activityResult = await addActivityInternal({
+      investor_id: newInvestor.id,
+      investor_firm: newInvestor.firm,
+      activity_type: 'created',
+      description: `Added ${newInvestor.firm} to pipeline`
+    }, data)
+
+    const newData = {
+      ...data,
+      investors: [...data.investors, newInvestor],
+      investorActivities: activityResult.investorActivities
+    }
     saveData(newData)
     return newInvestor
-  }, [data, saveData, userId])
+  }, [data, saveData, userId, addActivityInternal])
 
   const updateInvestor = useCallback(async (id, updates) => {
+    const existingInvestor = data.investors.find(i => i.id === id)
+
     if (supabase && userId) {
       await supabase.from('investors').update(updates).eq('id', id)
     }
 
+    let investorActivities = data.investorActivities
+
+    // Log stage change as an activity
+    if (updates.stage && existingInvestor && updates.stage !== existingInvestor.stage) {
+      const activityResult = await addActivityInternal({
+        investor_id: id,
+        investor_firm: existingInvestor.firm,
+        activity_type: 'stage_change',
+        description: `Stage changed from ${existingInvestor.stage} to ${updates.stage}`,
+        old_value: existingInvestor.stage,
+        new_value: updates.stage
+      }, { investorActivities })
+      investorActivities = activityResult.investorActivities
+    }
+
     const newData = {
       ...data,
-      investors: data.investors.map(i => i.id === id ? { ...i, ...updates } : i)
+      investors: data.investors.map(i => i.id === id ? { ...i, ...updates } : i),
+      investorActivities
     }
     saveData(newData)
-  }, [data, saveData, userId])
+  }, [data, saveData, userId, addActivityInternal])
 
   const deleteInvestor = useCallback(async (id) => {
     if (supabase && userId) {
@@ -152,14 +208,14 @@ export function useData(userId) {
 
   const addEmail = useCallback(async (email) => {
     const newEmail = { ...email, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('emails')
         .insert({ ...newEmail, user_id: userId })
         .select()
         .single()
-      
+
       if (!error) newEmail.id = inserted.id
     }
 
@@ -180,22 +236,43 @@ export function useData(userId) {
     saveData(newData)
   }, [data, saveData, userId])
 
+  const deleteEmail = useCallback(async (id) => {
+    if (supabase && userId) {
+      await supabase.from('emails').delete().eq('id', id)
+    }
+
+    const newData = { ...data, emails: data.emails.filter(e => e.id !== id) }
+    saveData(newData)
+  }, [data, saveData, userId])
+
   const addMeeting = useCallback(async (meeting) => {
     const newMeeting = { ...meeting, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('meetings')
         .insert({ ...newMeeting, user_id: userId })
         .select()
         .single()
-      
+
       if (!error) newMeeting.id = inserted.id
     }
 
     const newData = { ...data, meetings: [...data.meetings, newMeeting] }
     saveData(newData)
     return newMeeting
+  }, [data, saveData, userId])
+
+  const updateMeeting = useCallback(async (id, updates) => {
+    if (supabase && userId) {
+      await supabase.from('meetings').update(updates).eq('id', id)
+    }
+
+    const newData = {
+      ...data,
+      meetings: data.meetings.map(m => m.id === id ? { ...m, ...updates } : m)
+    }
+    saveData(newData)
   }, [data, saveData, userId])
 
   const deleteMeeting = useCallback(async (id) => {
@@ -221,20 +298,32 @@ export function useData(userId) {
 
   const addTermSheet = useCallback(async (termSheet) => {
     const newTermSheet = { ...termSheet, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('term_sheets')
         .insert({ ...newTermSheet, user_id: userId })
         .select()
         .single()
-      
+
       if (!error) newTermSheet.id = inserted.id
     }
 
     const newData = { ...data, termSheets: [...data.termSheets, newTermSheet] }
     saveData(newData)
     return newTermSheet
+  }, [data, saveData, userId])
+
+  const updateTermSheet = useCallback(async (id, updates) => {
+    if (supabase && userId) {
+      await supabase.from('term_sheets').update(updates).eq('id', id)
+    }
+
+    const newData = {
+      ...data,
+      termSheets: data.termSheets.map(t => t.id === id ? { ...t, ...updates } : t)
+    }
+    saveData(newData)
   }, [data, saveData, userId])
 
   const deleteTermSheet = useCallback(async (id) => {
@@ -248,14 +337,14 @@ export function useData(userId) {
 
   const addWeeklyAction = useCallback(async (action) => {
     const newAction = { ...action, id: Date.now(), created_at: new Date().toISOString() }
-    
+
     if (supabase && userId) {
       const { data: inserted, error } = await supabase
         .from('weekly_actions')
         .insert({ ...newAction, user_id: userId })
         .select()
         .single()
-      
+
       if (!error) newAction.id = inserted.id
     }
 
@@ -284,6 +373,124 @@ export function useData(userId) {
     const newData = { ...data, weeklyActions: data.weeklyActions.filter(a => a.id !== id) }
     saveData(newData)
   }, [data, saveData, userId])
+
+  // References CRUD
+  const addReference = useCallback(async (reference) => {
+    const newReference = { ...reference, id: Date.now(), created_at: new Date().toISOString() }
+
+    if (supabase && userId) {
+      const { data: inserted, error } = await supabase
+        .from('references')
+        .insert({ ...newReference, user_id: userId })
+        .select()
+        .single()
+
+      if (!error) newReference.id = inserted.id
+    }
+
+    const newData = { ...data, references: [...data.references, newReference] }
+    saveData(newData)
+    return newReference
+  }, [data, saveData, userId])
+
+  const updateReference = useCallback(async (id, updates) => {
+    if (supabase && userId) {
+      await supabase.from('references').update(updates).eq('id', id)
+    }
+
+    const newData = {
+      ...data,
+      references: data.references.map(r => r.id === id ? { ...r, ...updates } : r)
+    }
+    saveData(newData)
+  }, [data, saveData, userId])
+
+  const deleteReference = useCallback(async (id) => {
+    if (supabase && userId) {
+      await supabase.from('references').delete().eq('id', id)
+    }
+
+    const newData = { ...data, references: data.references.filter(r => r.id !== id) }
+    saveData(newData)
+  }, [data, saveData, userId])
+
+  // Investor Activities
+  const addActivity = useCallback(async (activity) => {
+    const newActivity = { ...activity, id: Date.now(), created_at: new Date().toISOString() }
+
+    if (supabase && userId) {
+      const { data: inserted, error } = await supabase
+        .from('investor_activities')
+        .insert({ ...newActivity, user_id: userId })
+        .select()
+        .single()
+
+      if (!error && inserted) newActivity.id = inserted.id
+    }
+
+    const newData = {
+      ...data,
+      investorActivities: [newActivity, ...data.investorActivities]
+    }
+    saveData(newData)
+    return newActivity
+  }, [data, saveData, userId])
+
+  const addQuickNote = useCallback(async (investorId, investorFirm, note) => {
+    return addActivity({
+      investor_id: investorId,
+      investor_firm: investorFirm,
+      activity_type: 'note',
+      description: note
+    })
+  }, [addActivity])
+
+  // Get unified timeline for an investor (activities + emails + meetings)
+  const getInvestorTimeline = useCallback((investorId, investorFirm) => {
+    const activities = data.investorActivities
+      .filter(a => a.investor_id === investorId)
+      .map(a => ({
+        id: `activity-${a.id}`,
+        type: a.activity_type,
+        description: a.description,
+        oldValue: a.old_value,
+        newValue: a.new_value,
+        timestamp: a.created_at,
+        source: 'activity'
+      }))
+
+    const emails = data.emails
+      .filter(e => e.investor === investorFirm)
+      .map(e => ({
+        id: `email-${e.id}`,
+        type: 'email',
+        description: `${e.type}: ${e.subject || 'No subject'}`,
+        timestamp: e.sent_date ? new Date(e.sent_date).toISOString() : e.created_at,
+        replied: e.replied,
+        source: 'email'
+      }))
+
+    const meetings = data.meetings
+      .filter(m => m.investor === investorFirm)
+      .map(m => ({
+        id: `meeting-${m.id}`,
+        type: 'meeting',
+        description: `${m.type || 'Meeting'}${m.notes ? ': ' + m.notes.substring(0, 100) : ''}`,
+        timestamp: m.date ? new Date(m.date).toISOString() : m.created_at,
+        followUp: m.follow_up,
+        source: 'meeting'
+      }))
+
+    return [...activities, ...emails, ...meetings]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+  }, [data])
+
+  // Get last touched date for an investor
+  const getLastTouched = useCallback((investorId, investorFirm) => {
+    const timeline = getInvestorTimeline(investorId, investorFirm)
+    if (timeline.length === 0) return null
+    return timeline[0].timestamp
+  }, [getInvestorTimeline])
 
   // Export to CSV
   const exportToCSV = useCallback((tableName) => {
@@ -317,18 +524,30 @@ export function useData(userId) {
     // Emails
     addEmail,
     updateEmail,
+    deleteEmail,
     // Meetings
     addMeeting,
+    updateMeeting,
     deleteMeeting,
     // Materials
     updateMaterial,
     // Term Sheets
     addTermSheet,
+    updateTermSheet,
     deleteTermSheet,
     // Weekly Actions
     addWeeklyAction,
     updateWeeklyAction,
     deleteWeeklyAction,
+    // References
+    addReference,
+    updateReference,
+    deleteReference,
+    // Investor Activities & Timeline
+    addActivity,
+    addQuickNote,
+    getInvestorTimeline,
+    getLastTouched,
     // Export
     exportToCSV
   }
