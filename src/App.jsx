@@ -203,6 +203,7 @@ export default function App() {
           <TermSheets
             data={data}
             addTermSheet={addTermSheet}
+            updateTermSheet={updateTermSheet}
             deleteTermSheet={deleteTermSheet}
           />
         )}
