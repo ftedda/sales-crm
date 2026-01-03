@@ -266,3 +266,43 @@ create trigger update_cap_table_options_updated_at
   before update on public.cap_table_options
   for each row
   execute function update_updated_at_column();
+
+-- Weekly Snapshots table (for tracking week-over-week changes)
+create table if not exists public.weekly_snapshots (
+  id bigserial primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  week_start date not null,
+  week_end date not null,
+  -- Stage counts
+  stage_target_list integer default 0,
+  stage_contacted integer default 0,
+  stage_engaged integer default 0,
+  stage_in_diligence integer default 0,
+  stage_term_sheet integer default 0,
+  stage_closing integer default 0,
+  stage_closed integer default 0,
+  stage_passed integer default 0,
+  -- Activity counts
+  emails_sent integer default 0,
+  emails_replied integer default 0,
+  meetings_held integer default 0,
+  new_investors integer default 0,
+  -- Rates
+  response_rate numeric,
+  win_rate numeric,
+  created_at timestamptz default now(),
+  unique(user_id, week_start)
+);
+
+-- Enable RLS on weekly_snapshots
+alter table public.weekly_snapshots enable row level security;
+
+-- Policies for weekly_snapshots
+create policy "Users can view own weekly_snapshots" on public.weekly_snapshots for select using (auth.uid() = user_id);
+create policy "Users can insert own weekly_snapshots" on public.weekly_snapshots for insert with check (auth.uid() = user_id);
+create policy "Users can update own weekly_snapshots" on public.weekly_snapshots for update using (auth.uid() = user_id);
+create policy "Users can delete own weekly_snapshots" on public.weekly_snapshots for delete using (auth.uid() = user_id);
+
+-- Index for weekly_snapshots
+create index if not exists idx_weekly_snapshots_user_id on public.weekly_snapshots(user_id);
+create index if not exists idx_weekly_snapshots_week_start on public.weekly_snapshots(week_start);

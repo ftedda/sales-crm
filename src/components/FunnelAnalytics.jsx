@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { TrendingUp, TrendingDown, Clock, Mail, Users, Target, ArrowRight, BarChart3 } from 'lucide-react'
+import { TrendingUp, TrendingDown, Clock, Mail, Users, Target, ArrowRight, BarChart3, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react'
 
 const STAGES = ['Target List', 'Contacted', 'Engaged', 'In Diligence', 'Term Sheet', 'Closing', 'Closed']
 const STAGE_COLORS = {
@@ -14,7 +14,79 @@ const STAGE_COLORS = {
 
 const TIERS = ['1 - Must Have', '2 - Strong Fit', '3 - Opportunistic']
 
+// Helper to get week boundaries
+const getWeekBoundaries = (weeksAgo = 0) => {
+  const now = new Date()
+  const dayOfWeek = now.getDay()
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() + diffToMonday - (weeksAgo * 7))
+  weekStart.setHours(0, 0, 0, 0)
+
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 6)
+  weekEnd.setHours(23, 59, 59, 999)
+
+  return { weekStart, weekEnd }
+}
+
 export default function FunnelAnalytics({ data }) {
+  // Calculate week-over-week metrics on the fly
+  const weekOverWeek = useMemo(() => {
+    const investors = data.investors || []
+    const emails = data.emails || []
+    const meetings = data.meetings || []
+
+    const thisWeek = getWeekBoundaries(0)
+    const lastWeek = getWeekBoundaries(1)
+
+    const getWeekMetrics = (start, end) => {
+      // New investors added this week (using first_contact_date or created_at)
+      const newInvestors = investors.filter(i => {
+        const date = new Date(i.first_contact_date || i.created_at)
+        return date >= start && date <= end
+      }).length
+
+      // Emails sent this week
+      const weekEmails = emails.filter(e => {
+        if (!e.sent_date) return false
+        const date = new Date(e.sent_date)
+        return date >= start && date <= end
+      })
+      const emailsSent = weekEmails.length
+      const emailsReplied = weekEmails.filter(e => e.replied).length
+
+      // Meetings this week
+      const meetingsHeld = meetings.filter(m => {
+        if (!m.date) return false
+        const date = new Date(m.date)
+        return date >= start && date <= end
+      }).length
+
+      // Response rate for this week's emails
+      const responseRate = emailsSent > 0 ? Math.round((emailsReplied / emailsSent) * 100) : 0
+
+      return { newInvestors, emailsSent, emailsReplied, meetingsHeld, responseRate }
+    }
+
+    const current = getWeekMetrics(thisWeek.weekStart, thisWeek.weekEnd)
+    const previous = getWeekMetrics(lastWeek.weekStart, lastWeek.weekEnd)
+
+    return {
+      current,
+      previous,
+      weekLabel: thisWeek.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      lastWeekLabel: lastWeek.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      deltas: {
+        newInvestors: current.newInvestors - previous.newInvestors,
+        emailsSent: current.emailsSent - previous.emailsSent,
+        meetingsHeld: current.meetingsHeld - previous.meetingsHeld,
+        responseRate: current.responseRate - previous.responseRate
+      }
+    }
+  }, [data.investors, data.emails, data.meetings])
+
   // Calculate funnel metrics
   const funnelMetrics = useMemo(() => {
     const investors = data.investors || []
@@ -41,30 +113,52 @@ export default function FunnelAnalytics({ data }) {
     return { stageCounts, conversions }
   }, [data.investors])
 
-  // Calculate average time in each stage
+  // Calculate average time in each stage using investor_activities
   const stageTimeMetrics = useMemo(() => {
     const investors = data.investors || []
+    const activities = data.investorActivities || []
     const now = new Date()
 
     return STAGES.map(stage => {
       const stageInvestors = investors.filter(i => i.stage === stage)
       if (stageInvestors.length === 0) return { stage, avgDays: null, count: 0 }
 
-      const totalDays = stageInvestors.reduce((sum, inv) => {
-        const contactDate = inv.first_contact_date ? new Date(inv.first_contact_date) : null
-        if (!contactDate) return sum
-        const days = Math.floor((now - contactDate) / (1000 * 60 * 60 * 24))
-        return sum + days
-      }, 0)
+      let totalDays = 0
+      let investorsWithData = 0
 
-      const investorsWithDates = stageInvestors.filter(i => i.first_contact_date).length
+      stageInvestors.forEach(inv => {
+        // Find when this investor entered their current stage
+        const stageChangeActivity = activities.find(
+          a => a.investor_id === inv.id &&
+               a.activity_type === 'stage_change' &&
+               a.new_value === inv.stage
+        )
+
+        let enteredStageDate
+        if (stageChangeActivity) {
+          enteredStageDate = new Date(stageChangeActivity.created_at)
+        } else if (inv.stage === 'Target List' || inv.stage === 'Contacted') {
+          // For initial stages, use first_contact_date or created_at
+          enteredStageDate = new Date(inv.first_contact_date || inv.created_at)
+        } else {
+          // No activity record found, skip this investor
+          return
+        }
+
+        if (enteredStageDate) {
+          const days = Math.floor((now - enteredStageDate) / (1000 * 60 * 60 * 24))
+          totalDays += days
+          investorsWithData++
+        }
+      })
+
       return {
         stage,
-        avgDays: investorsWithDates > 0 ? Math.round(totalDays / investorsWithDates) : null,
+        avgDays: investorsWithData > 0 ? Math.round(totalDays / investorsWithData) : null,
         count: stageInvestors.length
       }
     })
-  }, [data.investors])
+  }, [data.investors, data.investorActivities])
 
   // Calculate response rate by email type
   const emailMetrics = useMemo(() => {
@@ -113,28 +207,22 @@ export default function FunnelAnalytics({ data }) {
     })
   }, [data.investors])
 
-  // Calculate pipeline velocity trends
+  // Calculate pipeline velocity trends (last 8 weeks)
   const velocityMetrics = useMemo(() => {
     const investors = data.investors || []
     const emails = data.emails || []
     const meetings = data.meetings || []
 
-    // Get activity counts by week (last 8 weeks)
     const weeks = []
-    const now = new Date()
 
     for (let i = 7; i >= 0; i--) {
-      const weekStart = new Date(now)
-      weekStart.setDate(weekStart.getDate() - (i * 7) - 6)
-      const weekEnd = new Date(now)
-      weekEnd.setDate(weekEnd.getDate() - (i * 7))
-
+      const { weekStart, weekEnd } = getWeekBoundaries(i)
       const weekLabel = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
       // Count emails sent in this week
       const emailCount = emails.filter(e => {
-        if (!e.sentDate) return false
-        const date = new Date(e.sentDate)
+        if (!e.sent_date) return false
+        const date = new Date(e.sent_date)
         return date >= weekStart && date <= weekEnd
       }).length
 
@@ -147,8 +235,7 @@ export default function FunnelAnalytics({ data }) {
 
       // Count new investors added this week
       const newInvestors = investors.filter(inv => {
-        if (!inv.first_contact_date) return false
-        const date = new Date(inv.first_contact_date)
+        const date = new Date(inv.first_contact_date || inv.created_at)
         return date >= weekStart && date <= weekEnd
       }).length
 
@@ -182,8 +269,74 @@ export default function FunnelAnalytics({ data }) {
     return { totalInvestors, activeInvestors, closedDeals, passed, overallWinRate, overallResponseRate }
   }, [data.investors, data.emails])
 
+  // Delta indicator component
+  const DeltaIndicator = ({ value, suffix = '', inverse = false }) => {
+    if (value === null || value === undefined) return null
+    const isPositive = inverse ? value < 0 : value > 0
+
+    if (value === 0) {
+      return (
+        <span className="text-xs text-slate-400 flex items-center">
+          <Minus size={12} className="mr-0.5" />
+          0{suffix}
+        </span>
+      )
+    }
+
+    return (
+      <span className={`text-xs flex items-center ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+        {isPositive ? <ArrowUpRight size={12} className="mr-0.5" /> : <ArrowDownRight size={12} className="mr-0.5" />}
+        {value > 0 ? '+' : ''}{value}{suffix}
+      </span>
+    )
+  }
+
   return (
     <div className="space-y-4">
+      {/* Header */}
+      <h2 className="text-lg font-semibold text-slate-700">Funnel Analytics</h2>
+
+      {/* Week-over-Week Comparison */}
+      <div className="bg-gradient-to-r from-slate-50 to-indigo-50 border rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center">
+          <TrendingUp size={16} className="mr-2" />
+          This Week vs Last Week
+          <span className="ml-2 text-xs font-normal text-slate-500">
+            ({weekOverWeek.lastWeekLabel} → {weekOverWeek.weekLabel})
+          </span>
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-white rounded-lg p-3 border shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">New Investors</span>
+              <DeltaIndicator value={weekOverWeek.deltas.newInvestors} />
+            </div>
+            <p className="text-lg font-bold text-slate-800 mt-1">{weekOverWeek.current.newInvestors}</p>
+          </div>
+          <div className="bg-white rounded-lg p-3 border shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">Emails Sent</span>
+              <DeltaIndicator value={weekOverWeek.deltas.emailsSent} />
+            </div>
+            <p className="text-lg font-bold text-slate-800 mt-1">{weekOverWeek.current.emailsSent}</p>
+          </div>
+          <div className="bg-white rounded-lg p-3 border shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">Meetings Held</span>
+              <DeltaIndicator value={weekOverWeek.deltas.meetingsHeld} />
+            </div>
+            <p className="text-lg font-bold text-slate-800 mt-1">{weekOverWeek.current.meetingsHeld}</p>
+          </div>
+          <div className="bg-white rounded-lg p-3 border shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">Response Rate</span>
+              <DeltaIndicator value={weekOverWeek.deltas.responseRate} suffix="%" />
+            </div>
+            <p className="text-lg font-bold text-slate-800 mt-1">{weekOverWeek.current.responseRate}%</p>
+          </div>
+        </div>
+      </div>
+
       {/* Header Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white rounded-lg p-3 border shadow-sm">
@@ -407,7 +560,7 @@ export default function FunnelAnalytics({ data }) {
 
       {/* Insights */}
       <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-4">
-        <h3 className="font-medium text-indigo-900 text-sm mb-2">📊 Key Insights</h3>
+        <h3 className="font-medium text-indigo-900 text-sm mb-2">Key Insights</h3>
         <div className="text-xs text-indigo-700 space-y-1">
           {funnelMetrics.conversions.length > 0 && (
             <>

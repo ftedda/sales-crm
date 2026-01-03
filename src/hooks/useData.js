@@ -1,28 +1,32 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
+const defaultMaterials = [
+  { name: 'Executive Summary (2 pages)', tier: '1', status: 'Not Started', owner: '' },
+  { name: 'High-Level Metrics Snapshot', tier: '1', status: 'Not Started', owner: '' },
+  { name: 'Team Overview', tier: '1', status: 'Not Started', owner: '' },
+  { name: 'Full Pitch Deck', tier: '2', status: 'Not Started', owner: '' },
+  { name: 'Detailed Financial Model', tier: '2', status: 'Not Started', owner: '' },
+  { name: 'Customer Case Studies', tier: '2', status: 'Not Started', owner: '' },
+  { name: 'Product Roadmap', tier: '2', status: 'Not Started', owner: '' },
+  { name: 'Cap Table & Ownership', tier: '3', status: 'Not Started', owner: '' },
+  { name: 'Cohort Analysis & Unit Economics', tier: '3', status: 'Not Started', owner: '' },
+  { name: 'Sample Customer Contracts', tier: '3', status: 'Not Started', owner: '' },
+  { name: 'Reference Customer List', tier: '3', status: 'Not Started', owner: '' },
+  { name: 'Legal Structure & Agreements', tier: '3', status: 'Not Started', owner: '' },
+]
+
 const defaultData = {
   investors: [],
   emails: [],
   meetings: [],
-  materials: [
-    { id: 1, name: 'Executive Summary (2 pages)', tier: '1', status: 'Not Started', owner: '' },
-    { id: 2, name: 'High-Level Metrics Snapshot', tier: '1', status: 'Not Started', owner: '' },
-    { id: 3, name: 'Team Overview', tier: '1', status: 'Not Started', owner: '' },
-    { id: 4, name: 'Full Pitch Deck', tier: '2', status: 'Not Started', owner: '' },
-    { id: 5, name: 'Detailed Financial Model', tier: '2', status: 'Not Started', owner: '' },
-    { id: 6, name: 'Customer Case Studies', tier: '2', status: 'Not Started', owner: '' },
-    { id: 7, name: 'Product Roadmap', tier: '2', status: 'Not Started', owner: '' },
-    { id: 8, name: 'Cap Table & Ownership', tier: '3', status: 'Not Started', owner: '' },
-    { id: 9, name: 'Cohort Analysis & Unit Economics', tier: '3', status: 'Not Started', owner: '' },
-    { id: 10, name: 'Sample Customer Contracts', tier: '3', status: 'Not Started', owner: '' },
-    { id: 11, name: 'Reference Customer List', tier: '3', status: 'Not Started', owner: '' },
-    { id: 12, name: 'Legal Structure & Agreements', tier: '3', status: 'Not Started', owner: '' },
-  ],
+  materials: [],
   termSheets: [],
   weeklyActions: [],
   references: [],
-  investorActivities: []
+  investorActivities: [],
+  capTableShareholders: [],
+  capTableOptions: { allocated: 0, unallocated: 0 }
 }
 
 // Local storage fallback
@@ -59,7 +63,10 @@ export function useData(userId) {
       if (supabase && userId) {
         try {
           // Load from Supabase
-          const [investors, emails, meetings, materials, termSheets, weeklyActions, references, investorActivities] = await Promise.all([
+          const [
+            investors, emails, meetings, materials, termSheets, weeklyActions,
+            references, investorActivities, capTableShareholders, capTableOptions
+          ] = await Promise.all([
             supabase.from('investors').select('*').eq('user_id', userId),
             supabase.from('emails').select('*').eq('user_id', userId),
             supabase.from('meetings').select('*').eq('user_id', userId),
@@ -68,17 +75,32 @@ export function useData(userId) {
             supabase.from('weekly_actions').select('*').eq('user_id', userId),
             supabase.from('references').select('*').eq('user_id', userId),
             supabase.from('investor_activities').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+            supabase.from('cap_table_shareholders').select('*').eq('user_id', userId),
+            supabase.from('cap_table_options').select('*').eq('user_id', userId).single(),
           ])
+
+          // Seed materials if empty (new user)
+          let materialsData = materials.data || []
+          if (materialsData.length === 0) {
+            const materialsToSeed = defaultMaterials.map(m => ({ ...m, user_id: userId }))
+            const { data: seeded } = await supabase
+              .from('materials')
+              .insert(materialsToSeed)
+              .select()
+            materialsData = seeded || []
+          }
 
           setData({
             investors: investors.data || [],
             emails: emails.data || [],
             meetings: meetings.data || [],
-            materials: materials.data?.length ? materials.data : defaultData.materials,
+            materials: materialsData,
             termSheets: termSheets.data || [],
             weeklyActions: weeklyActions.data || [],
             references: references.data || [],
-            investorActivities: investorActivities.data || []
+            investorActivities: investorActivities.data || [],
+            capTableShareholders: capTableShareholders.data || [],
+            capTableOptions: capTableOptions.data || { allocated: 0, unallocated: 0 }
           })
         } catch (e) {
           console.error('Supabase load error:', e)
@@ -414,6 +436,59 @@ export function useData(userId) {
     saveData(newData)
   }, [data, saveData, userId])
 
+  // Cap Table Shareholders CRUD
+  const addShareholder = useCallback(async (shareholder) => {
+    const newShareholder = { ...shareholder, id: Date.now(), created_at: new Date().toISOString() }
+
+    if (supabase && userId) {
+      const { data: inserted, error } = await supabase
+        .from('cap_table_shareholders')
+        .insert({ ...newShareholder, user_id: userId })
+        .select()
+        .single()
+
+      if (!error) newShareholder.id = inserted.id
+    }
+
+    const newData = { ...data, capTableShareholders: [...data.capTableShareholders, newShareholder] }
+    saveData(newData)
+    return newShareholder
+  }, [data, saveData, userId])
+
+  const updateShareholder = useCallback(async (id, updates) => {
+    if (supabase && userId) {
+      await supabase.from('cap_table_shareholders').update(updates).eq('id', id)
+    }
+
+    const newData = {
+      ...data,
+      capTableShareholders: data.capTableShareholders.map(s => s.id === id ? { ...s, ...updates } : s)
+    }
+    saveData(newData)
+  }, [data, saveData, userId])
+
+  const deleteShareholder = useCallback(async (id) => {
+    if (supabase && userId) {
+      await supabase.from('cap_table_shareholders').delete().eq('id', id)
+    }
+
+    const newData = { ...data, capTableShareholders: data.capTableShareholders.filter(s => s.id !== id) }
+    saveData(newData)
+  }, [data, saveData, userId])
+
+  // Cap Table Option Pool
+  const updateOptionPool = useCallback(async (options) => {
+    if (supabase && userId) {
+      // Upsert the option pool (one row per user)
+      await supabase
+        .from('cap_table_options')
+        .upsert({ ...options, user_id: userId }, { onConflict: 'user_id' })
+    }
+
+    const newData = { ...data, capTableOptions: options }
+    saveData(newData)
+  }, [data, saveData, userId])
+
   // Investor Activities
   const addActivity = useCallback(async (activity) => {
     const newActivity = { ...activity, id: Date.now(), created_at: new Date().toISOString() }
@@ -558,6 +633,11 @@ export function useData(userId) {
     addReference,
     updateReference,
     deleteReference,
+    // Cap Table
+    addShareholder,
+    updateShareholder,
+    deleteShareholder,
+    updateOptionPool,
     // Investor Activities & Timeline
     addActivity,
     addQuickNote,

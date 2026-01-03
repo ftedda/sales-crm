@@ -40,6 +40,10 @@ export default function App() {
     addReference,
     updateReference,
     deleteReference,
+    addShareholder,
+    updateShareholder,
+    deleteShareholder,
+    updateOptionPool,
     addQuickNote,
     getInvestorTimeline,
     getLastTouched,
@@ -216,7 +220,13 @@ export default function App() {
           />
         )}
         {activeTab === 'captable' && (
-          <CapTable data={data} />
+          <CapTable
+            data={data}
+            addShareholder={addShareholder}
+            updateShareholder={updateShareholder}
+            deleteShareholder={deleteShareholder}
+            updateOptionPool={updateOptionPool}
+          />
         )}
         {activeTab === 'analytics' && (
           <FunnelAnalytics data={data} />

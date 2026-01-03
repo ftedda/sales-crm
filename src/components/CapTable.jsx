@@ -1,18 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { PlusCircle, Trash2, PieChart, TrendingUp, Users, Calculator, ChevronDown, ChevronUp } from 'lucide-react'
 
-const DEFAULT_CAP_TABLE = {
-  founders: [
-    { id: 1, name: 'Founder 1', shares: 4000000, type: 'Common' },
-    { id: 2, name: 'Founder 2', shares: 3000000, type: 'Common' },
-  ],
-  investors: [
-    { id: 1, name: 'Seed Investor', shares: 1500000, type: 'Preferred', round: 'Seed' },
-    { id: 2, name: 'Series A Lead', shares: 2000000, type: 'Preferred', round: 'Series A' },
-  ],
-  optionPool: { allocated: 1000000, unallocated: 500000 }
-}
-
 const EXIT_SCENARIOS = [
   { label: '$50M', value: 50 },
   { label: '$100M', value: 100 },
@@ -21,12 +9,13 @@ const EXIT_SCENARIOS = [
   { label: '$1B', value: 1000 },
 ]
 
-export default function CapTable({ data }) {
-  const [capTable, setCapTable] = useState(() => {
-    const stored = localStorage.getItem('capTableData')
-    return stored ? JSON.parse(stored) : DEFAULT_CAP_TABLE
-  })
-
+export default function CapTable({
+  data,
+  addShareholder,
+  updateShareholder,
+  deleteShareholder,
+  updateOptionPool
+}) {
   const [showFounderForm, setShowFounderForm] = useState(false)
   const [showInvestorForm, setShowInvestorForm] = useState(false)
   const [founderForm, setFounderForm] = useState({ name: '', shares: '' })
@@ -34,17 +23,22 @@ export default function CapTable({ data }) {
   const [expandedScenario, setExpandedScenario] = useState(null)
   const [selectedTermSheets, setSelectedTermSheets] = useState([])
 
-  // Save to localStorage whenever capTable changes
-  const saveCapTable = (newCapTable) => {
-    setCapTable(newCapTable)
-    localStorage.setItem('capTableData', JSON.stringify(newCapTable))
-  }
+  // Derive founders and investors from capTableShareholders
+  const founders = useMemo(() => {
+    return (data.capTableShareholders || []).filter(s => s.category === 'founder')
+  }, [data.capTableShareholders])
+
+  const investors = useMemo(() => {
+    return (data.capTableShareholders || []).filter(s => s.category === 'investor')
+  }, [data.capTableShareholders])
+
+  const optionPool = data.capTableOptions || { allocated: 0, unallocated: 0 }
 
   // Calculate totals
   const calculations = useMemo(() => {
-    const founderShares = capTable.founders.reduce((sum, f) => sum + Number(f.shares), 0)
-    const investorShares = capTable.investors.reduce((sum, i) => sum + Number(i.shares), 0)
-    const optionPoolTotal = capTable.optionPool.allocated + capTable.optionPool.unallocated
+    const founderShares = founders.reduce((sum, f) => sum + Number(f.shares), 0)
+    const investorShares = investors.reduce((sum, i) => sum + Number(i.shares), 0)
+    const optionPoolTotal = Number(optionPool.allocated || 0) + Number(optionPool.unallocated || 0)
     const totalShares = founderShares + investorShares + optionPoolTotal
 
     return {
@@ -56,21 +50,21 @@ export default function CapTable({ data }) {
       investorOwnership: totalShares > 0 ? (investorShares / totalShares * 100).toFixed(2) : 0,
       optionPoolPct: totalShares > 0 ? (optionPoolTotal / totalShares * 100).toFixed(2) : 0,
     }
-  }, [capTable])
+  }, [founders, investors, optionPool])
 
   // Calculate impact of each term sheet
   const termSheetScenarios = useMemo(() => {
-    return data.termSheets.map(ts => {
-      const preMoney = Number(ts.preMoney) * 1000000 // Convert to actual dollars
-      const roundSize = Number(ts.totalRound) * 1000000
+    return (data.termSheets || []).map(ts => {
+      const preMoney = Number(ts.preMoney || ts.pre_money) * 1000000
+      const roundSize = Number(ts.totalRound || ts.total_round) * 1000000
       const postMoney = preMoney + roundSize
 
       // Calculate new shares issued
-      const currentPricePerShare = preMoney / calculations.totalShares
-      const newSharesIssued = roundSize / currentPricePerShare
+      const currentPricePerShare = calculations.totalShares > 0 ? preMoney / calculations.totalShares : 1
+      const newSharesIssued = currentPricePerShare > 0 ? roundSize / currentPricePerShare : 0
 
       // Option pool shuffle (assume 10% post-money if not specified)
-      const targetOptionPool = 0.10 // 10% post-money
+      const targetOptionPool = 0.10
       const postMoneyShares = calculations.totalShares + newSharesIssued
       const requiredOptionPool = postMoneyShares * targetOptionPool
       const additionalOptionsNeeded = Math.max(0, requiredOptionPool - calculations.optionPoolTotal)
@@ -79,17 +73,17 @@ export default function CapTable({ data }) {
       const finalTotalShares = postMoneyShares + additionalOptionsNeeded
 
       // Ownership percentages post-round
-      const founderOwnershipPost = (calculations.founderShares / finalTotalShares * 100).toFixed(2)
-      const existingInvestorOwnershipPost = (calculations.investorShares / finalTotalShares * 100).toFixed(2)
-      const newInvestorOwnership = (newSharesIssued / finalTotalShares * 100).toFixed(2)
-      const optionPoolPost = ((calculations.optionPoolTotal + additionalOptionsNeeded) / finalTotalShares * 100).toFixed(2)
+      const founderOwnershipPost = finalTotalShares > 0 ? (calculations.founderShares / finalTotalShares * 100).toFixed(2) : 0
+      const existingInvestorOwnershipPost = finalTotalShares > 0 ? (calculations.investorShares / finalTotalShares * 100).toFixed(2) : 0
+      const newInvestorOwnership = finalTotalShares > 0 ? (newSharesIssued / finalTotalShares * 100).toFixed(2) : 0
+      const optionPoolPost = finalTotalShares > 0 ? ((calculations.optionPoolTotal + additionalOptionsNeeded) / finalTotalShares * 100).toFixed(2) : 0
 
       // Dilution calculation
       const founderDilution = (calculations.founderOwnership - founderOwnershipPost).toFixed(2)
 
       return {
         ...ts,
-        preMoney: ts.preMoney,
+        preMoney: ts.preMoney || ts.pre_money,
         postMoney: postMoney / 1000000,
         newSharesIssued,
         founderOwnershipPost,
@@ -132,61 +126,37 @@ export default function CapTable({ data }) {
   }, [selectedTermSheets, termSheetScenarios])
 
   // Add founder
-  const addFounder = () => {
+  const handleAddFounder = async () => {
     if (!founderForm.name || !founderForm.shares) return
-    const newFounder = {
-      id: Date.now(),
+    await addShareholder({
       name: founderForm.name,
       shares: Number(founderForm.shares),
-      type: 'Common'
-    }
-    saveCapTable({
-      ...capTable,
-      founders: [...capTable.founders, newFounder]
+      type: 'Common',
+      category: 'founder'
     })
     setFounderForm({ name: '', shares: '' })
     setShowFounderForm(false)
   }
 
   // Add existing investor
-  const addExistingInvestor = () => {
+  const handleAddInvestor = async () => {
     if (!investorForm.name || !investorForm.shares) return
-    const newInvestor = {
-      id: Date.now(),
+    await addShareholder({
       name: investorForm.name,
       shares: Number(investorForm.shares),
       type: 'Preferred',
+      category: 'investor',
       round: investorForm.round || 'Prior Round'
-    }
-    saveCapTable({
-      ...capTable,
-      investors: [...capTable.investors, newInvestor]
     })
     setInvestorForm({ name: '', shares: '', round: '' })
     setShowInvestorForm(false)
   }
 
-  // Delete founder
-  const deleteFounder = (id) => {
-    saveCapTable({
-      ...capTable,
-      founders: capTable.founders.filter(f => f.id !== id)
-    })
-  }
-
-  // Delete investor
-  const deleteInvestor = (id) => {
-    saveCapTable({
-      ...capTable,
-      investors: capTable.investors.filter(i => i.id !== id)
-    })
-  }
-
   // Update option pool
-  const updateOptionPool = (field, value) => {
-    saveCapTable({
-      ...capTable,
-      optionPool: { ...capTable.optionPool, [field]: Number(value) || 0 }
+  const handleUpdateOptionPool = (field, value) => {
+    updateOptionPool({
+      ...optionPool,
+      [field]: Number(value) || 0
     })
   }
 
@@ -278,31 +248,35 @@ export default function CapTable({ data }) {
                   className="w-full border rounded px-2 py-1 text-sm"
                 />
                 <div className="flex space-x-2">
-                  <button onClick={addFounder} className="bg-slate-800 text-white px-3 py-1 rounded text-xs">Add</button>
+                  <button onClick={handleAddFounder} className="bg-slate-800 text-white px-3 py-1 rounded text-xs">Add</button>
                   <button onClick={() => setShowFounderForm(false)} className="bg-slate-200 px-3 py-1 rounded text-xs">Cancel</button>
                 </div>
               </div>
             )}
 
-            <div className="space-y-1">
-              {capTable.founders.map(f => (
-                <div key={f.id} className="flex items-center justify-between bg-blue-50 rounded px-3 py-2">
-                  <div>
-                    <span className="text-sm font-medium">{f.name}</span>
-                    <span className="text-xs text-slate-500 ml-2">({f.type})</span>
+            {founders.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">No founders added yet</p>
+            ) : (
+              <div className="space-y-1">
+                {founders.map(f => (
+                  <div key={f.id} className="flex items-center justify-between bg-blue-50 rounded px-3 py-2">
+                    <div>
+                      <span className="text-sm font-medium">{f.name}</span>
+                      <span className="text-xs text-slate-500 ml-2">({f.type})</span>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm">{Number(f.shares).toLocaleString()} shares</span>
+                      <span className="text-xs text-slate-500">
+                        ({calculations.totalShares > 0 ? (f.shares / calculations.totalShares * 100).toFixed(1) : 0}%)
+                      </span>
+                      <button onClick={() => deleteShareholder(f.id)} className="text-red-400 hover:text-red-600">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm">{Number(f.shares).toLocaleString()} shares</span>
-                    <span className="text-xs text-slate-500">
-                      ({(f.shares / calculations.totalShares * 100).toFixed(1)}%)
-                    </span>
-                    <button onClick={() => deleteFounder(f.id)} className="text-red-400 hover:text-red-600">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Existing Investors */}
@@ -341,31 +315,35 @@ export default function CapTable({ data }) {
                   />
                 </div>
                 <div className="flex space-x-2">
-                  <button onClick={addExistingInvestor} className="bg-slate-800 text-white px-3 py-1 rounded text-xs">Add</button>
+                  <button onClick={handleAddInvestor} className="bg-slate-800 text-white px-3 py-1 rounded text-xs">Add</button>
                   <button onClick={() => setShowInvestorForm(false)} className="bg-slate-200 px-3 py-1 rounded text-xs">Cancel</button>
                 </div>
               </div>
             )}
 
-            <div className="space-y-1">
-              {capTable.investors.map(i => (
-                <div key={i.id} className="flex items-center justify-between bg-purple-50 rounded px-3 py-2">
-                  <div>
-                    <span className="text-sm font-medium">{i.name}</span>
-                    <span className="text-xs text-purple-500 ml-2">({i.round})</span>
+            {investors.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">No investors added yet</p>
+            ) : (
+              <div className="space-y-1">
+                {investors.map(i => (
+                  <div key={i.id} className="flex items-center justify-between bg-purple-50 rounded px-3 py-2">
+                    <div>
+                      <span className="text-sm font-medium">{i.name}</span>
+                      <span className="text-xs text-purple-500 ml-2">({i.round})</span>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm">{Number(i.shares).toLocaleString()} shares</span>
+                      <span className="text-xs text-slate-500">
+                        ({calculations.totalShares > 0 ? (i.shares / calculations.totalShares * 100).toFixed(1) : 0}%)
+                      </span>
+                      <button onClick={() => deleteShareholder(i.id)} className="text-red-400 hover:text-red-600">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm">{Number(i.shares).toLocaleString()} shares</span>
-                    <span className="text-xs text-slate-500">
-                      ({(i.shares / calculations.totalShares * 100).toFixed(1)}%)
-                    </span>
-                    <button onClick={() => deleteInvestor(i.id)} className="text-red-400 hover:text-red-600">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Option Pool */}
@@ -376,8 +354,8 @@ export default function CapTable({ data }) {
                 <label className="text-xs text-amber-700 block mb-1">Allocated</label>
                 <input
                   type="number"
-                  value={capTable.optionPool.allocated}
-                  onChange={e => updateOptionPool('allocated', e.target.value)}
+                  value={optionPool.allocated || 0}
+                  onChange={e => handleUpdateOptionPool('allocated', e.target.value)}
                   className="w-full border rounded px-2 py-1 text-sm"
                 />
               </div>
@@ -385,8 +363,8 @@ export default function CapTable({ data }) {
                 <label className="text-xs text-amber-700 block mb-1">Unallocated</label>
                 <input
                   type="number"
-                  value={capTable.optionPool.unallocated}
-                  onChange={e => updateOptionPool('unallocated', e.target.value)}
+                  value={optionPool.unallocated || 0}
+                  onChange={e => handleUpdateOptionPool('unallocated', e.target.value)}
                   className="w-full border rounded px-2 py-1 text-sm"
                 />
               </div>
