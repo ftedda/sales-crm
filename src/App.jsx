@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut } from 'lucide-react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, Handshake } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -9,6 +9,7 @@ import Emails from './components/Emails'
 import Meetings from './components/Meetings'
 import Materials from './components/Materials'
 import TermSheets from './components/TermSheets'
+import ReferenceCoordination from './components/ReferenceCoordination'
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = no user
@@ -31,6 +32,9 @@ export default function App() {
     addWeeklyAction,
     updateWeeklyAction,
     deleteWeeklyAction,
+    addReference,
+    updateReference,
+    deleteReference,
     exportToCSV
   } = useData(user?.id)
 
@@ -82,6 +86,7 @@ export default function App() {
     { id: 'meetings', label: 'Meetings', icon: Calendar },
     { id: 'materials', label: 'Materials', icon: FileText },
     { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
+    { id: 'references', label: 'References', icon: Handshake },
   ]
 
   if (loading) {
@@ -184,6 +189,14 @@ export default function App() {
             data={data}
             addTermSheet={addTermSheet}
             deleteTermSheet={deleteTermSheet}
+          />
+        )}
+        {activeTab === 'references' && (
+          <ReferenceCoordination
+            data={data}
+            addReference={addReference}
+            updateReference={updateReference}
+            deleteReference={deleteReference}
           />
         )}
       </div>
