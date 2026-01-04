@@ -30,7 +30,9 @@ export default function App() {
     addMeeting,
     updateMeeting,
     deleteMeeting,
+    addMaterial,
     updateMaterial,
+    deleteMaterial,
     addTermSheet,
     updateTermSheet,
     deleteTermSheet,
@@ -201,7 +203,9 @@ export default function App() {
         {activeTab === 'materials' && (
           <Materials
             data={data}
+            addMaterial={addMaterial}
             updateMaterial={updateMaterial}
+            deleteMaterial={deleteMaterial}
           />
         )}
         {activeTab === 'termsheets' && (
