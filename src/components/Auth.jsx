@@ -1,9 +1,8 @@
 import React, { useState } from 'react'
-import { signIn, signUp } from '../lib/supabase'
+import { signIn } from '../lib/supabase'
 import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react'
 
 export default function Auth({ onAuth }) {
-  const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -15,13 +14,8 @@ export default function Auth({ onAuth }) {
     setError(null)
 
     try {
-      if (isSignUp) {
-        await signUp(email, password)
-        setError('Check your email for a confirmation link!')
-      } else {
-        const { user } = await signIn(email, password)
-        onAuth(user)
-      }
+      const { user } = await signIn(email, password)
+      onAuth(user)
     } catch (e) {
       setError(e.message)
     }
@@ -44,7 +38,7 @@ export default function Auth({ onAuth }) {
 
         <div className="bg-white rounded-xl shadow-2xl p-8">
           <h2 className="text-xl font-semibold text-slate-800 mb-6">
-            {isSignUp ? 'Create an Account' : 'Welcome Back'}
+            Sign In
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,7 +74,7 @@ export default function Auth({ onAuth }) {
             </div>
 
             {error && (
-              <div className={`flex items-center space-x-2 p-3 rounded-lg ${error.includes('Check your email') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              <div className="flex items-center space-x-2 p-3 rounded-lg bg-red-50 text-red-700">
                 <AlertCircle size={18} />
                 <span className="text-sm">{error}</span>
               </div>
@@ -91,19 +85,10 @@ export default function Auth({ onAuth }) {
               disabled={loading}
               className="w-full bg-slate-800 text-white py-2 rounded-lg font-medium hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
-              <span>{loading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}</span>
+              <span>{loading ? 'Signing in...' : 'Sign In'}</span>
               <ArrowRight size={18} />
             </button>
           </form>
-
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-sm text-slate-600 hover:text-slate-800"
-            >
-              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-            </button>
-          </div>
 
           <div className="mt-6 pt-6 border-t border-slate-200">
             <button
