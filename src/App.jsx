@@ -44,6 +44,7 @@ export default function App() {
     updateShareholder,
     deleteShareholder,
     updateOptionPool,
+    saveOptionPool,
     addQuickNote,
     getInvestorTimeline,
     getLastTouched,
@@ -226,6 +227,7 @@ export default function App() {
             updateShareholder={updateShareholder}
             deleteShareholder={deleteShareholder}
             updateOptionPool={updateOptionPool}
+            saveOptionPool={saveOptionPool}
           />
         )}
         {activeTab === 'analytics' && (

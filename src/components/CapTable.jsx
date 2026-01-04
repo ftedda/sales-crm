@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react'
-import { PlusCircle, Trash2, PieChart, TrendingUp, Users, Calculator, ChevronDown, ChevronUp } from 'lucide-react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { PlusCircle, Trash2, PieChart, TrendingUp, Users, Calculator, ChevronDown, ChevronUp, Save, Check, AlertCircle } from 'lucide-react'
 
 const EXIT_SCENARIOS = [
   { label: '$50M', value: 50 },
@@ -14,7 +14,8 @@ export default function CapTable({
   addShareholder,
   updateShareholder,
   deleteShareholder,
-  updateOptionPool
+  updateOptionPool,
+  saveOptionPool
 }) {
   const [showFounderForm, setShowFounderForm] = useState(false)
   const [showInvestorForm, setShowInvestorForm] = useState(false)
@@ -22,6 +23,21 @@ export default function CapTable({
   const [investorForm, setInvestorForm] = useState({ name: '', shares: '', round: '' })
   const [expandedScenario, setExpandedScenario] = useState(null)
   const [selectedTermSheets, setSelectedTermSheets] = useState([])
+
+  // Local state for option pool with dirty tracking
+  const [localOptionPool, setLocalOptionPool] = useState({ allocated: 0, unallocated: 0 })
+  const [optionPoolDirty, setOptionPoolDirty] = useState(false)
+  const [saveStatus, setSaveStatus] = useState(null) // null, 'saving', 'saved', 'error'
+
+  // Sync local option pool with data when data changes
+  useEffect(() => {
+    const pool = data.capTableOptions || { allocated: 0, unallocated: 0 }
+    setLocalOptionPool({
+      allocated: pool.allocated || 0,
+      unallocated: pool.unallocated || 0
+    })
+    setOptionPoolDirty(false)
+  }, [data.capTableOptions])
 
   // Derive founders and investors from capTableShareholders
   const founders = useMemo(() => {
@@ -32,7 +48,8 @@ export default function CapTable({
     return (data.capTableShareholders || []).filter(s => s.category === 'investor')
   }, [data.capTableShareholders])
 
-  const optionPool = data.capTableOptions || { allocated: 0, unallocated: 0 }
+  // Use local option pool for display
+  const optionPool = localOptionPool
 
   // Calculate totals
   const calculations = useMemo(() => {
@@ -152,12 +169,31 @@ export default function CapTable({
     setShowInvestorForm(false)
   }
 
-  // Update option pool
+  // Update option pool locally (mark dirty)
   const handleUpdateOptionPool = (field, value) => {
-    updateOptionPool({
-      ...optionPool,
+    const newPool = {
+      ...localOptionPool,
       [field]: Number(value) || 0
-    })
+    }
+    setLocalOptionPool(newPool)
+    setOptionPoolDirty(true)
+    setSaveStatus(null)
+    // Also update parent state for calculations
+    updateOptionPool(newPool)
+  }
+
+  // Save option pool to Supabase
+  const handleSaveOptionPool = async () => {
+    setSaveStatus('saving')
+    const result = await saveOptionPool(localOptionPool)
+    if (result.success) {
+      setSaveStatus('saved')
+      setOptionPoolDirty(false)
+      // Clear saved status after 2 seconds
+      setTimeout(() => setSaveStatus(null), 2000)
+    } else {
+      setSaveStatus('error')
+    }
   }
 
   // Toggle term sheet selection for comparison
@@ -348,7 +384,44 @@ export default function CapTable({
 
           {/* Option Pool */}
           <div>
-            <h4 className="font-medium text-sm text-slate-700 mb-2">Option Pool (ESOP)</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium text-sm text-slate-700">Option Pool (ESOP)</h4>
+              <button
+                onClick={handleSaveOptionPool}
+                disabled={!optionPoolDirty || saveStatus === 'saving'}
+                className={`flex items-center space-x-1 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  saveStatus === 'saved'
+                    ? 'bg-green-100 text-green-700'
+                    : saveStatus === 'error'
+                    ? 'bg-red-100 text-red-700'
+                    : optionPoolDirty
+                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                {saveStatus === 'saving' ? (
+                  <>
+                    <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : saveStatus === 'saved' ? (
+                  <>
+                    <Check size={12} />
+                    <span>Saved</span>
+                  </>
+                ) : saveStatus === 'error' ? (
+                  <>
+                    <AlertCircle size={12} />
+                    <span>Error</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={12} />
+                    <span>{optionPoolDirty ? 'Save Changes' : 'Saved'}</span>
+                  </>
+                )}
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-amber-50 rounded p-3">
                 <label className="text-xs text-amber-700 block mb-1">Allocated</label>

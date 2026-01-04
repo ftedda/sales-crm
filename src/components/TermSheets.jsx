@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { PlusCircle, DollarSign, Pencil, Trash2, X, ChevronUp, ChevronDown, Search, Filter } from 'lucide-react'
+import { PlusCircle, DollarSign, Pencil, Trash2, X, ChevronUp, ChevronDown, Search, Filter, Loader2, Check, AlertCircle } from 'lucide-react'
 
 const emptyForm = { investor: '', dateReceived: '', leadAmount: '', totalRound: '', preMoney: '', boardSeats: '', terms: '', expiration: '' }
 
@@ -11,17 +11,27 @@ export default function TermSheets({ data, addTermSheet, updateTermSheet, delete
   const [sortDirection, setSortDirection] = useState('desc')
   const [searchQuery, setSearchQuery] = useState('')
   const [filterExpiring, setFilterExpiring] = useState(false)
+  const [saveStatus, setSaveStatus] = useState(null) // null, 'saving', 'saved', 'error'
 
   const handleSubmit = async () => {
     if (!form.investor) return
-    if (editingId) {
-      await updateTermSheet(editingId, form)
-      setEditingId(null)
-    } else {
-      await addTermSheet(form)
+    setSaveStatus('saving')
+    try {
+      if (editingId) {
+        await updateTermSheet(editingId, form)
+        setEditingId(null)
+      } else {
+        await addTermSheet(form)
+      }
+      setSaveStatus('saved')
+      setForm(emptyForm)
+      setShowForm(false)
+      // Clear status after 3 seconds
+      setTimeout(() => setSaveStatus(null), 3000)
+    } catch (e) {
+      console.error('Error saving term sheet:', e)
+      setSaveStatus('error')
     }
-    setForm(emptyForm)
-    setShowForm(false)
   }
 
   const handleEdit = (ts) => {
@@ -131,6 +141,20 @@ export default function TermSheets({ data, addTermSheet, updateTermSheet, delete
 
   return (
     <div className="space-y-4">
+      {/* Status Banner */}
+      {saveStatus === 'saved' && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center space-x-2 text-green-700">
+          <Check size={16} />
+          <span className="text-sm">Term sheet saved successfully to cloud</span>
+        </div>
+      )}
+      {saveStatus === 'error' && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center space-x-2 text-red-700">
+          <AlertCircle size={16} />
+          <span className="text-sm">Error saving term sheet. Check console for details.</span>
+        </div>
+      )}
+
       {/* Header with Add button */}
       <div className="flex items-center justify-between">
         <button
@@ -265,15 +289,24 @@ export default function TermSheets({ data, addTermSheet, updateTermSheet, delete
             <div className="flex justify-end space-x-2 mt-4">
               <button
                 onClick={handleCancel}
-                className="px-4 py-2 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50"
+                disabled={saveStatus === 'saving'}
+                className="px-4 py-2 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
-                className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700"
+                disabled={saveStatus === 'saving'}
+                className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700 disabled:opacity-50 flex items-center space-x-2"
               >
-                {editingId ? 'Save Changes' : 'Add Term Sheet'}
+                {saveStatus === 'saving' ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>{editingId ? 'Save Changes' : 'Add Term Sheet'}</span>
+                )}
               </button>
             </div>
           </div>

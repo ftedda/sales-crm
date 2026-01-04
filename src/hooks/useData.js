@@ -1,6 +1,46 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
+// Term Sheets field mapping (component uses camelCase, Supabase uses snake_case)
+const termSheetFieldsToSnake = {
+  dateReceived: 'date_received',
+  leadAmount: 'lead_amount',
+  totalRound: 'total_round',
+  preMoney: 'pre_money',
+  boardSeats: 'board_seats',
+  proRata: 'pro_rata'
+}
+
+const termSheetFieldsToCamel = {
+  date_received: 'dateReceived',
+  lead_amount: 'leadAmount',
+  total_round: 'totalRound',
+  pre_money: 'preMoney',
+  board_seats: 'boardSeats',
+  pro_rata: 'proRata'
+}
+
+// Convert term sheet object from camelCase to snake_case for Supabase
+const termSheetToDB = (obj) => {
+  const result = {}
+  for (const [key, value] of Object.entries(obj)) {
+    const newKey = termSheetFieldsToSnake[key] || key
+    result[newKey] = value
+  }
+  return result
+}
+
+// Convert term sheet object from snake_case to camelCase for UI
+const termSheetFromDB = (obj) => {
+  if (!obj) return obj
+  const result = {}
+  for (const [key, value] of Object.entries(obj)) {
+    const newKey = termSheetFieldsToCamel[key] || key
+    result[newKey] = value
+  }
+  return result
+}
+
 const defaultMaterials = [
   { name: 'Executive Summary (2 pages)', tier: '1', status: 'Not Started', owner: '' },
   { name: 'High-Level Metrics Snapshot', tier: '1', status: 'Not Started', owner: '' },
@@ -95,7 +135,7 @@ export function useData(userId) {
             emails: emails.data || [],
             meetings: meetings.data || [],
             materials: materialsData,
-            termSheets: termSheets.data || [],
+            termSheets: (termSheets.data || []).map(termSheetFromDB),
             weeklyActions: weeklyActions.data || [],
             references: references.data || [],
             investorActivities: investorActivities.data || [],
@@ -322,13 +362,28 @@ export function useData(userId) {
     const newTermSheet = { ...termSheet, id: Date.now(), created_at: new Date().toISOString() }
 
     if (supabase && userId) {
-      const { data: inserted, error } = await supabase
-        .from('term_sheets')
-        .insert({ ...newTermSheet, user_id: userId })
-        .select()
-        .single()
+      try {
+        // Convert camelCase to snake_case for Supabase
+        const dbTermSheet = termSheetToDB({ ...newTermSheet, user_id: userId })
+        console.log('Inserting term sheet to Supabase:', dbTermSheet)
 
-      if (!error) newTermSheet.id = inserted.id
+        const { data: inserted, error } = await supabase
+          .from('term_sheets')
+          .insert(dbTermSheet)
+          .select()
+          .single()
+
+        if (error) {
+          console.error('Error adding term sheet to Supabase:', error)
+        } else if (inserted) {
+          console.log('Term sheet inserted successfully:', inserted)
+          newTermSheet.id = inserted.id
+        }
+      } catch (e) {
+        console.error('Exception adding term sheet:', e)
+      }
+    } else {
+      console.log('Supabase not available or no userId, saving locally only')
     }
 
     const newData = { ...data, termSheets: [...data.termSheets, newTermSheet] }
@@ -338,7 +393,21 @@ export function useData(userId) {
 
   const updateTermSheet = useCallback(async (id, updates) => {
     if (supabase && userId) {
-      await supabase.from('term_sheets').update(updates).eq('id', id)
+      try {
+        // Convert camelCase to snake_case for Supabase
+        const dbUpdates = termSheetToDB(updates)
+        console.log('Updating term sheet in Supabase:', { id, dbUpdates })
+
+        const { error } = await supabase.from('term_sheets').update(dbUpdates).eq('id', id)
+
+        if (error) {
+          console.error('Error updating term sheet in Supabase:', error)
+        } else {
+          console.log('Term sheet updated successfully')
+        }
+      } catch (e) {
+        console.error('Exception updating term sheet:', e)
+      }
     }
 
     const newData = {
@@ -350,7 +419,16 @@ export function useData(userId) {
 
   const deleteTermSheet = useCallback(async (id) => {
     if (supabase && userId) {
-      await supabase.from('term_sheets').delete().eq('id', id)
+      try {
+        const { error } = await supabase.from('term_sheets').delete().eq('id', id)
+        if (error) {
+          console.error('Error deleting term sheet from Supabase:', error)
+        } else {
+          console.log('Term sheet deleted successfully')
+        }
+      } catch (e) {
+        console.error('Exception deleting term sheet:', e)
+      }
     }
 
     const newData = { ...data, termSheets: data.termSheets.filter(t => t.id !== id) }
@@ -441,13 +519,21 @@ export function useData(userId) {
     const newShareholder = { ...shareholder, id: Date.now(), created_at: new Date().toISOString() }
 
     if (supabase && userId) {
-      const { data: inserted, error } = await supabase
-        .from('cap_table_shareholders')
-        .insert({ ...newShareholder, user_id: userId })
-        .select()
-        .single()
+      try {
+        const { data: inserted, error } = await supabase
+          .from('cap_table_shareholders')
+          .insert({ ...newShareholder, user_id: userId })
+          .select()
+          .single()
 
-      if (!error) newShareholder.id = inserted.id
+        if (error) {
+          console.error('Error adding shareholder to Supabase:', error)
+        } else if (inserted) {
+          newShareholder.id = inserted.id
+        }
+      } catch (e) {
+        console.error('Exception adding shareholder:', e)
+      }
     }
 
     const newData = { ...data, capTableShareholders: [...data.capTableShareholders, newShareholder] }
@@ -457,7 +543,14 @@ export function useData(userId) {
 
   const updateShareholder = useCallback(async (id, updates) => {
     if (supabase && userId) {
-      await supabase.from('cap_table_shareholders').update(updates).eq('id', id)
+      try {
+        const { error } = await supabase.from('cap_table_shareholders').update(updates).eq('id', id)
+        if (error) {
+          console.error('Error updating shareholder in Supabase:', error)
+        }
+      } catch (e) {
+        console.error('Exception updating shareholder:', e)
+      }
     }
 
     const newData = {
@@ -469,25 +562,57 @@ export function useData(userId) {
 
   const deleteShareholder = useCallback(async (id) => {
     if (supabase && userId) {
-      await supabase.from('cap_table_shareholders').delete().eq('id', id)
+      try {
+        const { error } = await supabase.from('cap_table_shareholders').delete().eq('id', id)
+        if (error) {
+          console.error('Error deleting shareholder from Supabase:', error)
+        }
+      } catch (e) {
+        console.error('Exception deleting shareholder:', e)
+      }
     }
 
     const newData = { ...data, capTableShareholders: data.capTableShareholders.filter(s => s.id !== id) }
     saveData(newData)
   }, [data, saveData, userId])
 
-  // Cap Table Option Pool
-  const updateOptionPool = useCallback(async (options) => {
-    if (supabase && userId) {
-      // Upsert the option pool (one row per user)
-      await supabase
-        .from('cap_table_options')
-        .upsert({ ...options, user_id: userId }, { onConflict: 'user_id' })
-    }
-
+  // Cap Table Option Pool - update local state only (call saveOptionPool to persist)
+  const updateOptionPoolLocal = useCallback((options) => {
     const newData = { ...data, capTableOptions: options }
     saveData(newData)
-  }, [data, saveData, userId])
+  }, [data, saveData])
+
+  // Cap Table Option Pool - save to Supabase
+  const saveOptionPool = useCallback(async (options) => {
+    if (supabase && userId) {
+      try {
+        // Only include the actual data fields, not id/created_at/updated_at
+        const { error } = await supabase
+          .from('cap_table_options')
+          .upsert({
+            allocated: Number(options.allocated) || 0,
+            unallocated: Number(options.unallocated) || 0,
+            user_id: userId
+          }, { onConflict: 'user_id' })
+
+        if (error) {
+          console.error('Error saving option pool to Supabase:', error)
+          return { success: false, error: error.message }
+        }
+        return { success: true }
+      } catch (e) {
+        console.error('Exception saving option pool:', e)
+        return { success: false, error: e.message }
+      }
+    }
+    return { success: true } // No Supabase, local-only mode
+  }, [userId])
+
+  // Legacy function for backward compatibility
+  const updateOptionPool = useCallback(async (options) => {
+    updateOptionPoolLocal(options)
+    return saveOptionPool(options)
+  }, [updateOptionPoolLocal, saveOptionPool])
 
   // Investor Activities
   const addActivity = useCallback(async (activity) => {
@@ -638,6 +763,7 @@ export function useData(userId) {
     updateShareholder,
     deleteShareholder,
     updateOptionPool,
+    saveOptionPool,
     // Investor Activities & Timeline
     addActivity,
     addQuickNote,
