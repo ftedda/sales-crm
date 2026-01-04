@@ -98,8 +98,8 @@ export default function App() {
     { id: 'emails', label: 'Emails', icon: Mail },
     { id: 'meetings', label: 'Meetings', icon: Calendar },
     { id: 'materials', label: 'Materials', icon: FileText },
-    { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
     { id: 'references', label: 'References', icon: HeartHandshake },
+    { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
     { id: 'captable', label: 'Cap Table', icon: PieChart },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   ]
