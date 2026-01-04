@@ -346,6 +346,24 @@ export function useData(userId) {
     saveData(newData)
   }, [data, saveData, userId])
 
+  const addMaterial = useCallback(async (material) => {
+    const newMaterial = { ...material, id: Date.now(), created_at: new Date().toISOString() }
+
+    if (supabase && userId) {
+      const { data: inserted, error } = await supabase
+        .from('materials')
+        .insert({ ...newMaterial, user_id: userId })
+        .select()
+        .single()
+
+      if (!error && inserted) newMaterial.id = inserted.id
+    }
+
+    const newData = { ...data, materials: [...data.materials, newMaterial] }
+    saveData(newData)
+    return newMaterial
+  }, [data, saveData, userId])
+
   const updateMaterial = useCallback(async (id, updates) => {
     if (supabase && userId) {
       await supabase.from('materials').update(updates).eq('id', id)
@@ -355,6 +373,15 @@ export function useData(userId) {
       ...data,
       materials: data.materials.map(m => m.id === id ? { ...m, ...updates } : m)
     }
+    saveData(newData)
+  }, [data, saveData, userId])
+
+  const deleteMaterial = useCallback(async (id) => {
+    if (supabase && userId) {
+      await supabase.from('materials').delete().eq('id', id)
+    }
+
+    const newData = { ...data, materials: data.materials.filter(m => m.id !== id) }
     saveData(newData)
   }, [data, saveData, userId])
 
@@ -745,7 +772,9 @@ export function useData(userId) {
     updateMeeting,
     deleteMeeting,
     // Materials
+    addMaterial,
     updateMaterial,
+    deleteMaterial,
     // Term Sheets
     addTermSheet,
     updateTermSheet,

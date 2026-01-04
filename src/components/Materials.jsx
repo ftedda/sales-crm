@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { ChevronDown, Save } from 'lucide-react'
+import { ChevronDown, Save, Plus, Trash2, X } from 'lucide-react'
 
 const TIER_COLORS = { '1': 'bg-green-100 text-green-700', '2': 'bg-yellow-100 text-yellow-700', '3': 'bg-red-100 text-red-700' }
 const TIER_LABELS = { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3' }
@@ -11,11 +11,22 @@ const STATUS_COLORS = {
   'Complete': 'bg-green-100 text-green-700'
 }
 
-export default function Materials({ data, updateMaterial }) {
+const defaultNewMaterial = {
+  name: '',
+  tier: '1',
+  status: 'Not Started',
+  owner: '',
+  location: '',
+  notes: ''
+}
+
+export default function Materials({ data, addMaterial, updateMaterial, deleteMaterial }) {
   const [filterTier, setFilterTier] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [expandedRow, setExpandedRow] = useState(null)
   const [editData, setEditData] = useState({})
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newMaterial, setNewMaterial] = useState(defaultNewMaterial)
 
   const stats = useMemo(() => {
     const total = data.materials.length
@@ -59,6 +70,25 @@ export default function Materials({ data, updateMaterial }) {
     }
   }
 
+  const handleAddMaterial = async () => {
+    if (newMaterial.name.trim()) {
+      await addMaterial(newMaterial)
+      setNewMaterial(defaultNewMaterial)
+      setShowAddForm(false)
+    }
+  }
+
+  const handleDelete = async (id, e) => {
+    e.stopPropagation()
+    if (confirm('Are you sure you want to delete this material?')) {
+      await deleteMaterial(id)
+      if (expandedRow === id) {
+        setExpandedRow(null)
+        setEditData({})
+      }
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Progress */}
@@ -88,7 +118,7 @@ export default function Materials({ data, updateMaterial }) {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters and Add Button */}
       <div className="flex gap-2">
         <select
           value={filterTier}
@@ -108,7 +138,101 @@ export default function Materials({ data, updateMaterial }) {
           <option value="all">All Status</option>
           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="flex items-center px-3 py-2 bg-slate-800 text-white rounded-lg text-sm hover:bg-slate-700"
+        >
+          <Plus size={16} className="mr-1" /> Add
+        </button>
       </div>
+
+      {/* Add Material Form */}
+      {showAddForm && (
+        <div className="bg-white rounded-lg shadow-sm border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-medium text-slate-800">Add New Material</h3>
+            <button onClick={() => setShowAddForm(false)} className="text-slate-400 hover:text-slate-600">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+            <div className="col-span-2 md:col-span-1">
+              <label className="text-slate-500 block mb-1">Material Name *</label>
+              <input
+                value={newMaterial.name}
+                onChange={e => setNewMaterial(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full border rounded px-2 py-1.5"
+                placeholder="e.g., Pitch Deck"
+              />
+            </div>
+            <div>
+              <label className="text-slate-500 block mb-1">Tier</label>
+              <select
+                value={newMaterial.tier}
+                onChange={e => setNewMaterial(prev => ({ ...prev, tier: e.target.value }))}
+                className="w-full border rounded px-2 py-1.5"
+              >
+                <option value="1">Tier 1 - Essential</option>
+                <option value="2">Tier 2 - Important</option>
+                <option value="3">Tier 3 - Deep Dive</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-slate-500 block mb-1">Status</label>
+              <select
+                value={newMaterial.status}
+                onChange={e => setNewMaterial(prev => ({ ...prev, status: e.target.value }))}
+                className="w-full border rounded px-2 py-1.5"
+              >
+                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-slate-500 block mb-1">Owner</label>
+              <input
+                value={newMaterial.owner}
+                onChange={e => setNewMaterial(prev => ({ ...prev, owner: e.target.value }))}
+                className="w-full border rounded px-2 py-1.5"
+                placeholder="Responsible person"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="text-slate-500 block mb-1">Location / Link</label>
+              <input
+                value={newMaterial.location}
+                onChange={e => setNewMaterial(prev => ({ ...prev, location: e.target.value }))}
+                className="w-full border rounded px-2 py-1.5"
+                placeholder="Google Drive link, Notion page, etc."
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="text-slate-500 block mb-1 text-sm">Notes</label>
+            <textarea
+              value={newMaterial.notes}
+              onChange={e => setNewMaterial(prev => ({ ...prev, notes: e.target.value }))}
+              className="w-full border rounded px-2 py-1.5 text-sm"
+              rows={2}
+              placeholder="Additional notes..."
+            />
+          </div>
+          <div className="flex justify-end gap-2 mt-3">
+            <button
+              onClick={() => { setShowAddForm(false); setNewMaterial(defaultNewMaterial) }}
+              className="px-3 py-1.5 text-sm bg-slate-100 rounded hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddMaterial}
+              disabled={!newMaterial.name.trim()}
+              className="flex items-center px-3 py-1.5 text-sm bg-slate-800 text-white rounded hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus size={14} className="mr-1" /> Add Material
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
@@ -224,7 +348,13 @@ export default function Materials({ data, updateMaterial }) {
                             placeholder="Additional notes about this material..."
                           />
                         </div>
-                        <div className="flex items-center justify-end mt-3">
+                        <div className="flex items-center justify-between mt-3">
+                          <button
+                            onClick={(e) => handleDelete(m.id, e)}
+                            className="flex items-center px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 size={12} className="mr-1" /> Delete
+                          </button>
                           <div className="flex gap-2">
                             <button
                               onClick={() => { setExpandedRow(null); setEditData({}) }}
