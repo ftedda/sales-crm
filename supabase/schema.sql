@@ -101,6 +101,7 @@ create table if not exists public.materials (
   owner text,
   last_updated timestamptz,
   location text,
+  sort_order integer default 0,
   created_at timestamptz default now()
 );
 
@@ -402,6 +403,7 @@ create index if not exists idx_meetings_user_id on public.meetings(user_id);
 create index if not exists idx_meetings_org_id on public.meetings(org_id);
 create index if not exists idx_materials_user_id on public.materials(user_id);
 create index if not exists idx_materials_org_id on public.materials(org_id);
+create index if not exists idx_materials_sort_order on public.materials(org_id, sort_order);
 create index if not exists idx_term_sheets_user_id on public.term_sheets(user_id);
 create index if not exists idx_term_sheets_org_id on public.term_sheets(org_id);
 create index if not exists idx_weekly_actions_user_id on public.weekly_actions(user_id);

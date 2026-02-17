@@ -1,5 +1,21 @@
 import React, { useMemo, useState } from 'react'
-import { ChevronDown, Save, Plus, Trash2, X } from 'lucide-react'
+import { ChevronDown, Save, Plus, Trash2, X, GripVertical } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  MouseSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
+import SortableRow from './SortableRow'
 
 const TIER_COLORS = { '1': 'bg-green-100 text-green-700', '2': 'bg-yellow-100 text-yellow-700', '3': 'bg-red-100 text-red-700' }
 const TIER_LABELS = { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3' }
@@ -20,13 +36,25 @@ const defaultNewMaterial = {
   notes: ''
 }
 
-export default function Materials({ data, addMaterial, updateMaterial, deleteMaterial }) {
+export default function Materials({ data, addMaterial, updateMaterial, deleteMaterial, reorderMaterials }) {
   const [filterTier, setFilterTier] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [expandedRow, setExpandedRow] = useState(null)
   const [editData, setEditData] = useState({})
   const [showAddForm, setShowAddForm] = useState(false)
   const [newMaterial, setNewMaterial] = useState(defaultNewMaterial)
+
+  const isFiltered = filterTier !== 'all' || filterStatus !== 'all'
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor)
+  )
+
+  const sorted = useMemo(() => {
+    return [...data.materials].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  }, [data.materials])
 
   const stats = useMemo(() => {
     const total = data.materials.length
@@ -36,7 +64,7 @@ export default function Materials({ data, addMaterial, updateMaterial, deleteMat
   }, [data.materials])
 
   const filtered = useMemo(() => {
-    let result = data.materials
+    let result = sorted
     if (filterTier !== 'all') {
       result = result.filter(m => m.tier === filterTier)
     }
@@ -44,7 +72,7 @@ export default function Materials({ data, addMaterial, updateMaterial, deleteMat
       result = result.filter(m => m.status === filterStatus)
     }
     return result
-  }, [data.materials, filterTier, filterStatus])
+  }, [sorted, filterTier, filterStatus])
 
   const progressPct = stats.total > 0 ? (stats.complete / stats.total) * 100 : 0
 
@@ -88,6 +116,28 @@ export default function Materials({ data, addMaterial, updateMaterial, deleteMat
       }
     }
   }
+
+  const handleDragStart = () => {
+    // Collapse any expanded edit row when dragging starts
+    if (expandedRow) {
+      setExpandedRow(null)
+      setEditData({})
+    }
+  }
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = sorted.findIndex(m => m.id === active.id)
+    const newIndex = sorted.findIndex(m => m.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const reordered = arrayMove(sorted, oldIndex, newIndex)
+    reorderMaterials(reordered)
+  }
+
+  const colCount = isFiltered ? 5 : 6
 
   return (
     <div className="space-y-4">
@@ -145,6 +195,10 @@ export default function Materials({ data, addMaterial, updateMaterial, deleteMat
           <Plus size={16} className="mr-1" /> Add
         </button>
       </div>
+
+      {isFiltered && (
+        <p className="text-xs text-slate-400 italic">Drag to reorder is available when no filters are active.</p>
+      )}
 
       {/* Add Material Form */}
       {showAddForm && (
@@ -236,148 +290,180 @@ export default function Materials({ data, addMaterial, updateMaterial, deleteMat
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Material</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600 w-20">Tier</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600 w-32">Status</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600 hidden sm:table-cell">Owner</th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map(m => (
-                <React.Fragment key={m.id}>
-                  <tr
-                    className="hover:bg-slate-50 cursor-pointer"
-                    onClick={() => handleExpand(m)}
-                  >
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-slate-800">{m.name}</div>
-                      {m.location && <div className="text-xs text-slate-400 truncate max-w-48">{m.location}</div>}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${TIER_COLORS[m.tier]}`}>
-                        {TIER_LABELS[m.tier]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                      <select
-                        value={m.status}
-                        onChange={e => updateMaterial(m.id, { status: e.target.value })}
-                        className={`${STATUS_COLORS[m.status]} px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer w-full`}
-                      >
-                        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2 hidden sm:table-cell" onClick={e => e.stopPropagation()}>
-                      <input
-                        type="text"
-                        placeholder="Owner"
-                        value={m.owner || ''}
-                        onChange={e => updateMaterial(m.id, { owner: e.target.value })}
-                        className="w-full border rounded px-2 py-1 text-xs"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedRow === m.id ? 'rotate-180' : ''}`} />
-                    </td>
-                  </tr>
-                  {expandedRow === m.id && (
-                    <tr className="bg-slate-50">
-                      <td colSpan={5} className="px-3 py-3">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                          <div className="col-span-2 md:col-span-1">
-                            <label className="text-slate-500 block mb-1">Material Name</label>
-                            <input
-                              value={editData.name || ''}
-                              onChange={e => handleEditChange('name', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Tier</label>
-                            <select
-                              value={editData.tier || ''}
-                              onChange={e => handleEditChange('tier', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            >
-                              <option value="1">Tier 1 - Essential</option>
-                              <option value="2">Tier 2 - Important</option>
-                              <option value="3">Tier 3 - Deep Dive</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Status</label>
-                            <select
-                              value={editData.status || ''}
-                              onChange={e => handleEditChange('status', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                            >
-                              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-slate-500 block mb-1">Owner</label>
-                            <input
-                              value={editData.owner || ''}
-                              onChange={e => handleEditChange('owner', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                              placeholder="Responsible person"
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <label className="text-slate-500 block mb-1">Location / Link</label>
-                            <input
-                              value={editData.location || ''}
-                              onChange={e => handleEditChange('location', e.target.value)}
-                              className="w-full border rounded px-2 py-1.5"
-                              placeholder="Google Drive link, Notion page, etc."
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-2">
-                          <label className="text-slate-500 block mb-1 text-xs">Notes</label>
-                          <textarea
-                            value={editData.notes || ''}
-                            onChange={e => handleEditChange('notes', e.target.value)}
-                            className="w-full border rounded px-2 py-1.5 text-xs"
-                            rows={2}
-                            placeholder="Additional notes about this material..."
-                          />
-                        </div>
-                        <div className="flex items-center justify-between mt-3">
-                          <button
-                            onClick={(e) => handleDelete(m.id, e)}
-                            className="flex items-center px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded"
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b">
+                <tr>
+                  {!isFiltered && <th className="w-8"></th>}
+                  <th className="text-left px-3 py-2 font-medium text-slate-600">Material</th>
+                  <th className="text-left px-3 py-2 font-medium text-slate-600 w-20">Tier</th>
+                  <th className="text-left px-3 py-2 font-medium text-slate-600 w-32">Status</th>
+                  <th className="text-left px-3 py-2 font-medium text-slate-600 hidden sm:table-cell">Owner</th>
+                  <th className="w-10"></th>
+                </tr>
+              </thead>
+              <SortableContext
+                items={filtered.map(m => m.id)}
+                strategy={verticalListSortingStrategy}
+                disabled={isFiltered}
+              >
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.map(m => (
+                    <SortableRow key={m.id} id={m.id} disabled={isFiltered}>
+                      {({ setNodeRef, setActivatorNodeRef, listeners, attributes, style, isDragging }) => (
+                        <React.Fragment>
+                          <tr
+                            ref={setNodeRef}
+                            style={style}
+                            className={`hover:bg-slate-50 cursor-pointer ${isDragging ? 'bg-slate-100' : ''}`}
+                            onClick={() => handleExpand(m)}
                           >
-                            <Trash2 size={12} className="mr-1" /> Delete
-                          </button>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => { setExpandedRow(null); setEditData({}) }}
-                              className="px-3 py-1.5 text-xs bg-slate-100 rounded hover:bg-slate-200"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handleSave}
-                              className="flex items-center px-3 py-1.5 text-xs bg-slate-800 text-white rounded hover:bg-slate-700"
-                            >
-                              <Save size={12} className="mr-1" /> Save
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                            {!isFiltered && (
+                              <td
+                                className="px-1 py-2 w-8"
+                                ref={setActivatorNodeRef}
+                                {...listeners}
+                                {...attributes}
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <GripVertical size={14} className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing mx-auto" />
+                              </td>
+                            )}
+                            <td className="px-3 py-2">
+                              <div className="font-medium text-slate-800">{m.name}</div>
+                              {m.location && <div className="text-xs text-slate-400 truncate max-w-48">{m.location}</div>}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${TIER_COLORS[m.tier]}`}>
+                                {TIER_LABELS[m.tier]}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                              <select
+                                value={m.status}
+                                onChange={e => updateMaterial(m.id, { status: e.target.value })}
+                                className={`${STATUS_COLORS[m.status]} px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer w-full`}
+                              >
+                                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                            </td>
+                            <td className="px-3 py-2 hidden sm:table-cell" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                placeholder="Owner"
+                                value={m.owner || ''}
+                                onChange={e => updateMaterial(m.id, { owner: e.target.value })}
+                                className="w-full border rounded px-2 py-1 text-xs"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedRow === m.id ? 'rotate-180' : ''}`} />
+                            </td>
+                          </tr>
+                          {expandedRow === m.id && (
+                            <tr className="bg-slate-50">
+                              <td colSpan={colCount} className="px-3 py-3">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                                  <div className="col-span-2 md:col-span-1">
+                                    <label className="text-slate-500 block mb-1">Material Name</label>
+                                    <input
+                                      value={editData.name || ''}
+                                      onChange={e => handleEditChange('name', e.target.value)}
+                                      className="w-full border rounded px-2 py-1.5"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-slate-500 block mb-1">Tier</label>
+                                    <select
+                                      value={editData.tier || ''}
+                                      onChange={e => handleEditChange('tier', e.target.value)}
+                                      className="w-full border rounded px-2 py-1.5"
+                                    >
+                                      <option value="1">Tier 1 - Essential</option>
+                                      <option value="2">Tier 2 - Important</option>
+                                      <option value="3">Tier 3 - Deep Dive</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-slate-500 block mb-1">Status</label>
+                                    <select
+                                      value={editData.status || ''}
+                                      onChange={e => handleEditChange('status', e.target.value)}
+                                      className="w-full border rounded px-2 py-1.5"
+                                    >
+                                      {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-slate-500 block mb-1">Owner</label>
+                                    <input
+                                      value={editData.owner || ''}
+                                      onChange={e => handleEditChange('owner', e.target.value)}
+                                      className="w-full border rounded px-2 py-1.5"
+                                      placeholder="Responsible person"
+                                    />
+                                  </div>
+                                  <div className="col-span-2">
+                                    <label className="text-slate-500 block mb-1">Location / Link</label>
+                                    <input
+                                      value={editData.location || ''}
+                                      onChange={e => handleEditChange('location', e.target.value)}
+                                      className="w-full border rounded px-2 py-1.5"
+                                      placeholder="Google Drive link, Notion page, etc."
+                                    />
+                                  </div>
+                                </div>
+                                <div className="mt-2">
+                                  <label className="text-slate-500 block mb-1 text-xs">Notes</label>
+                                  <textarea
+                                    value={editData.notes || ''}
+                                    onChange={e => handleEditChange('notes', e.target.value)}
+                                    className="w-full border rounded px-2 py-1.5 text-xs"
+                                    rows={2}
+                                    placeholder="Additional notes about this material..."
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between mt-3">
+                                  <button
+                                    onClick={(e) => handleDelete(m.id, e)}
+                                    className="flex items-center px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded"
+                                  >
+                                    <Trash2 size={12} className="mr-1" /> Delete
+                                  </button>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => { setExpandedRow(null); setEditData({}) }}
+                                      className="px-3 py-1.5 text-xs bg-slate-100 rounded hover:bg-slate-200"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={handleSave}
+                                      className="flex items-center px-3 py-1.5 text-xs bg-slate-800 text-white rounded hover:bg-slate-700"
+                                    >
+                                      <Save size={12} className="mr-1" /> Save
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      )}
+                    </SortableRow>
+                  ))}
+                </tbody>
+              </SortableContext>
+            </table>
+          </div>
+        </DndContext>
         {filtered.length === 0 && (
           <p className="text-center py-8 text-slate-400 text-sm">No materials match filters</p>
         )}

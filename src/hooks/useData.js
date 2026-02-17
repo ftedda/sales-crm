@@ -42,18 +42,18 @@ const termSheetFromDB = (obj) => {
 }
 
 const defaultMaterials = [
-  { name: 'Executive Summary (2 pages)', tier: '1', status: 'Not Started', owner: '' },
-  { name: 'High-Level Metrics Snapshot', tier: '1', status: 'Not Started', owner: '' },
-  { name: 'Team Overview', tier: '1', status: 'Not Started', owner: '' },
-  { name: 'Full Pitch Deck', tier: '2', status: 'Not Started', owner: '' },
-  { name: 'Detailed Financial Model', tier: '2', status: 'Not Started', owner: '' },
-  { name: 'Customer Case Studies', tier: '2', status: 'Not Started', owner: '' },
-  { name: 'Product Roadmap', tier: '2', status: 'Not Started', owner: '' },
-  { name: 'Cap Table & Ownership', tier: '3', status: 'Not Started', owner: '' },
-  { name: 'Cohort Analysis & Unit Economics', tier: '3', status: 'Not Started', owner: '' },
-  { name: 'Sample Customer Contracts', tier: '3', status: 'Not Started', owner: '' },
-  { name: 'Reference Customer List', tier: '3', status: 'Not Started', owner: '' },
-  { name: 'Legal Structure & Agreements', tier: '3', status: 'Not Started', owner: '' },
+  { name: 'Executive Summary (2 pages)', tier: '1', status: 'Not Started', owner: '', sort_order: 1 },
+  { name: 'High-Level Metrics Snapshot', tier: '1', status: 'Not Started', owner: '', sort_order: 2 },
+  { name: 'Team Overview', tier: '1', status: 'Not Started', owner: '', sort_order: 3 },
+  { name: 'Full Pitch Deck', tier: '2', status: 'Not Started', owner: '', sort_order: 4 },
+  { name: 'Detailed Financial Model', tier: '2', status: 'Not Started', owner: '', sort_order: 5 },
+  { name: 'Customer Case Studies', tier: '2', status: 'Not Started', owner: '', sort_order: 6 },
+  { name: 'Product Roadmap', tier: '2', status: 'Not Started', owner: '', sort_order: 7 },
+  { name: 'Cap Table & Ownership', tier: '3', status: 'Not Started', owner: '', sort_order: 8 },
+  { name: 'Cohort Analysis & Unit Economics', tier: '3', status: 'Not Started', owner: '', sort_order: 9 },
+  { name: 'Sample Customer Contracts', tier: '3', status: 'Not Started', owner: '', sort_order: 10 },
+  { name: 'Reference Customer List', tier: '3', status: 'Not Started', owner: '', sort_order: 11 },
+  { name: 'Legal Structure & Agreements', tier: '3', status: 'Not Started', owner: '', sort_order: 12 },
 ]
 
 const defaultData = {
@@ -110,7 +110,7 @@ export function useData(userId, orgId) {
             supabase.from('investors').select('*').eq('org_id', orgId),
             supabase.from('emails').select('*').eq('org_id', orgId),
             supabase.from('meetings').select('*').eq('org_id', orgId),
-            supabase.from('materials').select('*').eq('org_id', orgId),
+            supabase.from('materials').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
             supabase.from('term_sheets').select('*').eq('org_id', orgId),
             supabase.from('weekly_actions').select('*').eq('org_id', orgId),
             supabase.from('references').select('*').eq('org_id', orgId),
@@ -344,7 +344,8 @@ export function useData(userId, orgId) {
   }, [data, saveData, orgId])
 
   const addMaterial = useCallback(async (material) => {
-    const newMaterial = { ...material, id: Date.now(), created_at: new Date().toISOString() }
+    const maxOrder = data.materials.reduce((max, m) => Math.max(max, m.sort_order || 0), 0)
+    const newMaterial = { ...material, id: Date.now(), created_at: new Date().toISOString(), sort_order: maxOrder + 1 }
 
     if (supabase && orgId) {
       const { data: inserted, error } = await supabase
@@ -383,6 +384,29 @@ export function useData(userId, orgId) {
 
     const newData = { ...data, materials: data.materials.filter(m => m.id !== id) }
     saveData(newData)
+  }, [data, saveData, orgId])
+
+  const reorderMaterials = useCallback(async (reorderedMaterials) => {
+    // Assign sequential sort_order values
+    const updated = reorderedMaterials.map((m, i) => ({ ...m, sort_order: i + 1 }))
+
+    // Optimistic local update
+    const newData = { ...data, materials: updated }
+    saveData(newData)
+
+    // Persist changed rows to Supabase
+    if (supabase && orgId) {
+      const updates = updated
+        .filter((m, i) => {
+          const original = data.materials.find(om => om.id === m.id)
+          return !original || original.sort_order !== i + 1
+        })
+        .map(m => supabase.from('materials').update({ sort_order: m.sort_order }).eq('id', m.id))
+
+      const results = await Promise.all(updates)
+      const failed = results.find(r => r.error)
+      if (failed) console.error('Failed to persist reorder:', failed.error)
+    }
   }, [data, saveData, orgId])
 
   const addTermSheet = useCallback(async (termSheet) => {
@@ -726,6 +750,7 @@ export function useData(userId, orgId) {
     addMaterial,
     updateMaterial,
     deleteMaterial,
+    reorderMaterials,
     // Term Sheets
     addTermSheet,
     updateTermSheet,

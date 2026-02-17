@@ -34,6 +34,7 @@ export default function App() {
     addMaterial,
     updateMaterial,
     deleteMaterial,
+    reorderMaterials,
     addTermSheet,
     updateTermSheet,
     deleteTermSheet,
@@ -218,6 +219,7 @@ export default function App() {
             addMaterial={addMaterial}
             updateMaterial={updateMaterial}
             deleteMaterial={deleteMaterial}
+            reorderMaterials={reorderMaterials}
           />
         )}
         {activeTab === 'termsheets' && (
