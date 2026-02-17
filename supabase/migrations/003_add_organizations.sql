@@ -200,136 +200,10 @@ DROP POLICY IF EXISTS "Users can update own cap_table_options" ON public.cap_tab
 DROP POLICY IF EXISTS "Users can delete own cap_table_options" ON public.cap_table_options;
 
 -- ============================================================
--- 7. Create new org-based RLS policies
+-- 7. SECURITY DEFINER helper functions (bypass RLS)
 -- ============================================================
 
--- Helper: check if current user is a member of the given org
--- (inlined in each policy for clarity and to avoid function-based RLS overhead)
-
--- organizations: members can view their orgs
-CREATE POLICY "Org members can view organizations"
-  ON public.organizations FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = organizations.id AND org_members.user_id = auth.uid()));
-
--- org_members: members can view members of their orgs
-CREATE POLICY "Org members can view org_members"
-  ON public.org_members FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members om WHERE om.org_id = org_members.org_id AND om.user_id = auth.uid()));
-
--- investors
-CREATE POLICY "Org members can select investors" ON public.investors FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = investors.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert investors" ON public.investors FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = investors.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update investors" ON public.investors FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = investors.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete investors" ON public.investors FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = investors.org_id AND org_members.user_id = auth.uid()));
-
--- emails
-CREATE POLICY "Org members can select emails" ON public.emails FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = emails.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert emails" ON public.emails FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = emails.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update emails" ON public.emails FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = emails.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete emails" ON public.emails FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = emails.org_id AND org_members.user_id = auth.uid()));
-
--- meetings
-CREATE POLICY "Org members can select meetings" ON public.meetings FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = meetings.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert meetings" ON public.meetings FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = meetings.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update meetings" ON public.meetings FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = meetings.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete meetings" ON public.meetings FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = meetings.org_id AND org_members.user_id = auth.uid()));
-
--- materials
-CREATE POLICY "Org members can select materials" ON public.materials FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = materials.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert materials" ON public.materials FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = materials.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update materials" ON public.materials FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = materials.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete materials" ON public.materials FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = materials.org_id AND org_members.user_id = auth.uid()));
-
--- term_sheets
-CREATE POLICY "Org members can select term_sheets" ON public.term_sheets FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = term_sheets.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert term_sheets" ON public.term_sheets FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = term_sheets.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update term_sheets" ON public.term_sheets FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = term_sheets.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete term_sheets" ON public.term_sheets FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = term_sheets.org_id AND org_members.user_id = auth.uid()));
-
--- weekly_actions
-CREATE POLICY "Org members can select weekly_actions" ON public.weekly_actions FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_actions.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert weekly_actions" ON public.weekly_actions FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_actions.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update weekly_actions" ON public.weekly_actions FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_actions.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete weekly_actions" ON public.weekly_actions FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_actions.org_id AND org_members.user_id = auth.uid()));
-
--- references (quoted - reserved word)
-CREATE POLICY "Org members can select references" ON public."references" FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = "references".org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert references" ON public."references" FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = "references".org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update references" ON public."references" FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = "references".org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete references" ON public."references" FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = "references".org_id AND org_members.user_id = auth.uid()));
-
--- investor_activities
-CREATE POLICY "Org members can select investor_activities" ON public.investor_activities FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = investor_activities.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert investor_activities" ON public.investor_activities FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = investor_activities.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update investor_activities" ON public.investor_activities FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = investor_activities.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete investor_activities" ON public.investor_activities FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = investor_activities.org_id AND org_members.user_id = auth.uid()));
-
--- cap_table_shareholders
-CREATE POLICY "Org members can select cap_table_shareholders" ON public.cap_table_shareholders FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = cap_table_shareholders.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert cap_table_shareholders" ON public.cap_table_shareholders FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = cap_table_shareholders.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update cap_table_shareholders" ON public.cap_table_shareholders FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = cap_table_shareholders.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete cap_table_shareholders" ON public.cap_table_shareholders FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = cap_table_shareholders.org_id AND org_members.user_id = auth.uid()));
-
--- cap_table_options
-CREATE POLICY "Org members can select cap_table_options" ON public.cap_table_options FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = cap_table_options.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert cap_table_options" ON public.cap_table_options FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = cap_table_options.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update cap_table_options" ON public.cap_table_options FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = cap_table_options.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete cap_table_options" ON public.cap_table_options FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = cap_table_options.org_id AND org_members.user_id = auth.uid()));
-
--- weekly_snapshots
-CREATE POLICY "Org members can select weekly_snapshots" ON public.weekly_snapshots FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_snapshots.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can insert weekly_snapshots" ON public.weekly_snapshots FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_snapshots.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can update weekly_snapshots" ON public.weekly_snapshots FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_snapshots.org_id AND org_members.user_id = auth.uid()));
-CREATE POLICY "Org members can delete weekly_snapshots" ON public.weekly_snapshots FOR DELETE
-  USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_snapshots.org_id AND org_members.user_id = auth.uid()));
-
--- ============================================================
--- 8. Helper function to resolve user's org (bypasses RLS)
--- ============================================================
-
+-- Resolve a user's org_id (used by frontend on login)
 CREATE OR REPLACE FUNCTION public.get_user_org(p_user_id uuid)
 RETURNS uuid
 LANGUAGE sql
@@ -338,5 +212,143 @@ SET search_path = public
 AS $$
   SELECT org_id FROM org_members WHERE user_id = p_user_id LIMIT 1;
 $$;
+
+-- Check if current user is a member of the given org
+-- Used by all RLS policies to avoid self-referencing RLS issues on org_members
+CREATE OR REPLACE FUNCTION public.is_org_member(check_org_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM org_members
+    WHERE org_id = check_org_id AND user_id = auth.uid()
+  );
+$$;
+
+-- ============================================================
+-- 8. Create new org-based RLS policies (using is_org_member function)
+-- ============================================================
+
+-- organizations: members can view their orgs
+CREATE POLICY "Org members can view organizations"
+  ON public.organizations FOR SELECT
+  USING (public.is_org_member(id));
+
+-- org_members: members can view members of their orgs
+CREATE POLICY "Org members can view org_members"
+  ON public.org_members FOR SELECT
+  USING (public.is_org_member(org_id));
+
+-- investors
+CREATE POLICY "Org members can select investors" ON public.investors FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert investors" ON public.investors FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update investors" ON public.investors FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete investors" ON public.investors FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- emails
+CREATE POLICY "Org members can select emails" ON public.emails FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert emails" ON public.emails FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update emails" ON public.emails FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete emails" ON public.emails FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- meetings
+CREATE POLICY "Org members can select meetings" ON public.meetings FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert meetings" ON public.meetings FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update meetings" ON public.meetings FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete meetings" ON public.meetings FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- materials
+CREATE POLICY "Org members can select materials" ON public.materials FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert materials" ON public.materials FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update materials" ON public.materials FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete materials" ON public.materials FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- term_sheets
+CREATE POLICY "Org members can select term_sheets" ON public.term_sheets FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert term_sheets" ON public.term_sheets FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update term_sheets" ON public.term_sheets FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete term_sheets" ON public.term_sheets FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- weekly_actions
+CREATE POLICY "Org members can select weekly_actions" ON public.weekly_actions FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert weekly_actions" ON public.weekly_actions FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update weekly_actions" ON public.weekly_actions FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete weekly_actions" ON public.weekly_actions FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- references (quoted - reserved word)
+CREATE POLICY "Org members can select references" ON public."references" FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert references" ON public."references" FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update references" ON public."references" FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete references" ON public."references" FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- investor_activities
+CREATE POLICY "Org members can select investor_activities" ON public.investor_activities FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert investor_activities" ON public.investor_activities FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update investor_activities" ON public.investor_activities FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete investor_activities" ON public.investor_activities FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- cap_table_shareholders
+CREATE POLICY "Org members can select cap_table_shareholders" ON public.cap_table_shareholders FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert cap_table_shareholders" ON public.cap_table_shareholders FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update cap_table_shareholders" ON public.cap_table_shareholders FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete cap_table_shareholders" ON public.cap_table_shareholders FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- cap_table_options
+CREATE POLICY "Org members can select cap_table_options" ON public.cap_table_options FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert cap_table_options" ON public.cap_table_options FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update cap_table_options" ON public.cap_table_options FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete cap_table_options" ON public.cap_table_options FOR DELETE
+  USING (public.is_org_member(org_id));
+
+-- weekly_snapshots
+CREATE POLICY "Org members can select weekly_snapshots" ON public.weekly_snapshots FOR SELECT
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can insert weekly_snapshots" ON public.weekly_snapshots FOR INSERT
+  WITH CHECK (public.is_org_member(org_id));
+CREATE POLICY "Org members can update weekly_snapshots" ON public.weekly_snapshots FOR UPDATE
+  USING (public.is_org_member(org_id));
+CREATE POLICY "Org members can delete weekly_snapshots" ON public.weekly_snapshots FOR DELETE
+  USING (public.is_org_member(org_id));
 
 COMMIT;

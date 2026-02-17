@@ -238,127 +238,155 @@ alter table public.cap_table_options enable row level security;
 alter table public.weekly_snapshots enable row level security;
 
 -- ============================================================
--- Org-based RLS policies
+-- SECURITY DEFINER helper functions (bypass RLS)
+-- ============================================================
+
+-- Resolve a user's org_id (used by frontend on login)
+create or replace function public.get_user_org(p_user_id uuid)
+returns uuid
+language sql
+security definer
+set search_path = public
+as $$
+  select org_id from org_members where user_id = p_user_id limit 1;
+$$;
+
+-- Check if current user is a member of the given org
+-- Used by all RLS policies to avoid self-referencing RLS issues on org_members
+create or replace function public.is_org_member(check_org_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from org_members
+    where org_id = check_org_id and user_id = auth.uid()
+  );
+$$;
+
+-- ============================================================
+-- Org-based RLS policies (using is_org_member function)
 -- Members of the same organization can see/edit all org data
 -- ============================================================
 
 -- organizations: members can view their orgs
 create policy "Org members can view organizations" on public.organizations for select
-  using (exists (select 1 from public.org_members where org_members.org_id = organizations.id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(id));
 
 -- org_members: members can view members of their orgs
 create policy "Org members can view org_members" on public.org_members for select
-  using (exists (select 1 from public.org_members om where om.org_id = org_members.org_id and om.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- investors
 create policy "Org members can select investors" on public.investors for select
-  using (exists (select 1 from public.org_members where org_members.org_id = investors.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert investors" on public.investors for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = investors.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update investors" on public.investors for update
-  using (exists (select 1 from public.org_members where org_members.org_id = investors.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete investors" on public.investors for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = investors.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- emails
 create policy "Org members can select emails" on public.emails for select
-  using (exists (select 1 from public.org_members where org_members.org_id = emails.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert emails" on public.emails for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = emails.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update emails" on public.emails for update
-  using (exists (select 1 from public.org_members where org_members.org_id = emails.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete emails" on public.emails for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = emails.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- meetings
 create policy "Org members can select meetings" on public.meetings for select
-  using (exists (select 1 from public.org_members where org_members.org_id = meetings.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert meetings" on public.meetings for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = meetings.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update meetings" on public.meetings for update
-  using (exists (select 1 from public.org_members where org_members.org_id = meetings.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete meetings" on public.meetings for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = meetings.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- materials
 create policy "Org members can select materials" on public.materials for select
-  using (exists (select 1 from public.org_members where org_members.org_id = materials.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert materials" on public.materials for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = materials.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update materials" on public.materials for update
-  using (exists (select 1 from public.org_members where org_members.org_id = materials.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete materials" on public.materials for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = materials.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- term_sheets
 create policy "Org members can select term_sheets" on public.term_sheets for select
-  using (exists (select 1 from public.org_members where org_members.org_id = term_sheets.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert term_sheets" on public.term_sheets for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = term_sheets.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update term_sheets" on public.term_sheets for update
-  using (exists (select 1 from public.org_members where org_members.org_id = term_sheets.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete term_sheets" on public.term_sheets for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = term_sheets.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- weekly_actions
 create policy "Org members can select weekly_actions" on public.weekly_actions for select
-  using (exists (select 1 from public.org_members where org_members.org_id = weekly_actions.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert weekly_actions" on public.weekly_actions for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = weekly_actions.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update weekly_actions" on public.weekly_actions for update
-  using (exists (select 1 from public.org_members where org_members.org_id = weekly_actions.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete weekly_actions" on public.weekly_actions for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = weekly_actions.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- references
 create policy "Org members can select references" on public.references for select
-  using (exists (select 1 from public.org_members where org_members.org_id = references.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert references" on public.references for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = references.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update references" on public.references for update
-  using (exists (select 1 from public.org_members where org_members.org_id = references.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete references" on public.references for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = references.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- investor_activities
 create policy "Org members can select investor_activities" on public.investor_activities for select
-  using (exists (select 1 from public.org_members where org_members.org_id = investor_activities.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert investor_activities" on public.investor_activities for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = investor_activities.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update investor_activities" on public.investor_activities for update
-  using (exists (select 1 from public.org_members where org_members.org_id = investor_activities.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete investor_activities" on public.investor_activities for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = investor_activities.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- cap_table_shareholders
 create policy "Org members can select cap_table_shareholders" on public.cap_table_shareholders for select
-  using (exists (select 1 from public.org_members where org_members.org_id = cap_table_shareholders.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert cap_table_shareholders" on public.cap_table_shareholders for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = cap_table_shareholders.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update cap_table_shareholders" on public.cap_table_shareholders for update
-  using (exists (select 1 from public.org_members where org_members.org_id = cap_table_shareholders.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete cap_table_shareholders" on public.cap_table_shareholders for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = cap_table_shareholders.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- cap_table_options
 create policy "Org members can select cap_table_options" on public.cap_table_options for select
-  using (exists (select 1 from public.org_members where org_members.org_id = cap_table_options.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert cap_table_options" on public.cap_table_options for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = cap_table_options.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update cap_table_options" on public.cap_table_options for update
-  using (exists (select 1 from public.org_members where org_members.org_id = cap_table_options.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete cap_table_options" on public.cap_table_options for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = cap_table_options.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- weekly_snapshots
 create policy "Org members can select weekly_snapshots" on public.weekly_snapshots for select
-  using (exists (select 1 from public.org_members where org_members.org_id = weekly_snapshots.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can insert weekly_snapshots" on public.weekly_snapshots for insert
-  with check (exists (select 1 from public.org_members where org_members.org_id = weekly_snapshots.org_id and org_members.user_id = auth.uid()));
+  with check (public.is_org_member(org_id));
 create policy "Org members can update weekly_snapshots" on public.weekly_snapshots for update
-  using (exists (select 1 from public.org_members where org_members.org_id = weekly_snapshots.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 create policy "Org members can delete weekly_snapshots" on public.weekly_snapshots for delete
-  using (exists (select 1 from public.org_members where org_members.org_id = weekly_snapshots.org_id and org_members.user_id = auth.uid()));
+  using (public.is_org_member(org_id));
 
 -- ============================================================
 -- Indexes

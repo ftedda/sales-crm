@@ -100,7 +100,6 @@ export function useData(userId, orgId) {
       setLoading(true)
       setError(null)
 
-      console.log('[useData] Loading with userId:', userId, 'orgId:', orgId)
       if (supabase && orgId) {
         try {
           // Load from Supabase by org
@@ -131,13 +130,6 @@ export function useData(userId, orgId) {
             materialsData = seeded || []
           }
 
-          console.log('[useData] Query results:', {
-            investors: investors.data?.length, investorsErr: investors.error,
-            emails: emails.data?.length, emailsErr: emails.error,
-            meetings: meetings.data?.length, meetingsErr: meetings.error,
-            materials: materials.data?.length, materialsErr: materials.error,
-          })
-
           setData({
             investors: investors.data || [],
             emails: emails.data || [],
@@ -151,7 +143,7 @@ export function useData(userId, orgId) {
             capTableOptions: capTableOptions.data || { allocated: 0, unallocated: 0 }
           })
         } catch (e) {
-          console.error('[useData] Supabase load error:', e)
+          console.error('Supabase load error:', e)
           setError(e.message)
           setData(loadFromLocalStorage())
         }
