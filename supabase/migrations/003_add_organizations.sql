@@ -326,4 +326,17 @@ CREATE POLICY "Org members can update weekly_snapshots" ON public.weekly_snapsho
 CREATE POLICY "Org members can delete weekly_snapshots" ON public.weekly_snapshots FOR DELETE
   USING (EXISTS (SELECT 1 FROM public.org_members WHERE org_members.org_id = weekly_snapshots.org_id AND org_members.user_id = auth.uid()));
 
+-- ============================================================
+-- 8. Helper function to resolve user's org (bypasses RLS)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.get_user_org(p_user_id uuid)
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT org_id FROM org_members WHERE user_id = p_user_id LIMIT 1;
+$$;
+
 COMMIT;
