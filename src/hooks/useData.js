@@ -346,20 +346,21 @@ export function useData(userId, orgId) {
   const addMaterial = useCallback(async (material) => {
     const newMaterial = { ...material, id: Date.now(), created_at: new Date().toISOString() }
 
-    if (supabase && userId) {
+    if (supabase && orgId) {
       const { data: inserted, error } = await supabase
         .from('materials')
-        .insert({ ...newMaterial, user_id: userId })
+        .insert({ ...newMaterial, user_id: userId, org_id: orgId })
         .select()
         .single()
 
-      if (!error && inserted) newMaterial.id = inserted.id
+      if (error) throw error
+      newMaterial.id = inserted.id
     }
 
     const newData = { ...data, materials: [...data.materials, newMaterial] }
     saveData(newData)
     return newMaterial
-  }, [data, saveData, userId])
+  }, [data, saveData, userId, orgId])
 
   const updateMaterial = useCallback(async (id, updates) => {
     if (supabase && orgId) {
@@ -375,13 +376,14 @@ export function useData(userId, orgId) {
   }, [data, saveData, orgId])
 
   const deleteMaterial = useCallback(async (id) => {
-    if (supabase && userId) {
-      await supabase.from('materials').delete().eq('id', id)
+    if (supabase && orgId) {
+      const { error } = await supabase.from('materials').delete().eq('id', id)
+      if (error) throw error
     }
 
     const newData = { ...data, materials: data.materials.filter(m => m.id !== id) }
     saveData(newData)
-  }, [data, saveData, userId])
+  }, [data, saveData, orgId])
 
   const addTermSheet = useCallback(async (termSheet) => {
     const newTermSheet = { ...termSheet, id: Date.now(), created_at: new Date().toISOString() }
