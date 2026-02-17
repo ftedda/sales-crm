@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, HeartHandshake, PieChart, TrendingUp } from 'lucide-react'
-import { onAuthStateChange, signOut, supabase } from './lib/supabase'
+import { onAuthStateChange, signOut, supabase, getUserOrg } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
 import Dashboard from './components/Dashboard'
@@ -15,6 +15,7 @@ import FunnelAnalytics from './components/FunnelAnalytics'
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = no user
+  const [orgId, setOrgId] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
 
   const {
@@ -51,7 +52,7 @@ export default function App() {
     getInvestorTimeline,
     getLastTouched,
     exportToCSV
-  } = useData(user?.id)
+  } = useData(user?.id, orgId)
 
   useEffect(() => {
     // Check for existing session
@@ -70,6 +71,17 @@ export default function App() {
       setUser(null)
     }
   }, [])
+
+  // Resolve org membership after user is authenticated
+  useEffect(() => {
+    if (user?.id) {
+      getUserOrg(user.id).then(resolvedOrgId => {
+        setOrgId(resolvedOrgId)
+      })
+    } else {
+      setOrgId(null)
+    }
+  }, [user])
 
   const handleSignOut = async () => {
     try {

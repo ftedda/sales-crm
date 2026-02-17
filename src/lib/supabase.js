@@ -42,3 +42,14 @@ export const onAuthStateChange = (callback) => {
   if (!supabase) return { data: { subscription: { unsubscribe: () => {} } } }
   return supabase.auth.onAuthStateChange(callback)
 }
+
+export const getUserOrg = async (userId) => {
+  if (!supabase) return null
+  const { data, error } = await supabase
+    .from('org_members')
+    .select('org_id')
+    .eq('user_id', userId)
+    .single()
+  if (error) return null
+  return data.org_id
+}
