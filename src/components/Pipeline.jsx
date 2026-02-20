@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { PlusCircle, Trash2, Search, X, ChevronDown, Save, Clock, History, TrendingUp, Flame, Snowflake, Sun } from 'lucide-react'
+import { PlusCircle, Trash2, Search, X, ChevronDown, Save, Clock, History, TrendingUp, Flame, Snowflake, Sun, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import InvestorTimeline, { getEngagementLevel, formatRelativeTime } from './InvestorTimeline'
 
 const STAGES = ['Target List', 'Contacted', 'Engaged', 'In Diligence', 'Term Sheet', 'Closing', 'Closed', 'Passed']
@@ -33,6 +33,16 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
   const [expandedRow, setExpandedRow] = useState(null)
   const [editData, setEditData] = useState({})
   const [selectedInvestor, setSelectedInvestor] = useState(null)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  const ENGAGEMENT_ORDER = ['high', 'medium', 'warm', 'cooling', 'cold', 'none']
 
   const handleSubmit = async () => {
     if (!form.firm) return
@@ -87,8 +97,32 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
         i.notes?.toLowerCase().includes(q)
       )
     }
+    if (sortConfig.key) {
+      const dir = sortConfig.direction === 'asc' ? 1 : -1
+      result = [...result].sort((a, b) => {
+        switch (sortConfig.key) {
+          case 'firm':
+          case 'contact':
+            return dir * (a[sortConfig.key] || '').localeCompare(b[sortConfig.key] || '', undefined, { sensitivity: 'base' })
+          case 'tier':
+            return dir * (a.tier || '').localeCompare(b.tier || '')
+          case 'stage':
+            return dir * (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage))
+          case 'activity': {
+            const timelineA = getInvestorTimeline ? getInvestorTimeline(a.id, a.firm) : []
+            const timelineB = getInvestorTimeline ? getInvestorTimeline(b.id, b.firm) : []
+            const levelA = ENGAGEMENT_ORDER.indexOf(getEngagementLevel(timelineA).level)
+            const levelB = ENGAGEMENT_ORDER.indexOf(getEngagementLevel(timelineB).level)
+            if (levelA !== levelB) return dir * (levelA - levelB)
+            return dir * (timelineB.length - timelineA.length)
+          }
+          default:
+            return 0
+        }
+      })
+    }
     return result
-  }, [data.investors, stageFilter, tierFilter, search])
+  }, [data.investors, stageFilter, tierFilter, search, sortConfig, getInvestorTimeline])
 
   const clearFilters = () => {
     setStageFilter('all')
@@ -184,11 +218,29 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b">
               <tr>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Firm</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600 hidden sm:table-cell">Contact</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600 hidden md:table-cell">Tier</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Stage</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600 hidden lg:table-cell">Activity</th>
+                {[
+                  { key: 'firm', label: 'Firm', className: '' },
+                  { key: 'contact', label: 'Contact', className: 'hidden sm:table-cell' },
+                  { key: 'tier', label: 'Tier', className: 'hidden md:table-cell' },
+                  { key: 'stage', label: 'Stage', className: '' },
+                  { key: 'activity', label: 'Activity', className: 'hidden lg:table-cell' },
+                ].map(col => {
+                  const SortIcon = sortConfig.key === col.key
+                    ? (sortConfig.direction === 'asc' ? ArrowUp : ArrowDown)
+                    : ArrowUpDown
+                  return (
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className={`text-left px-3 py-2 font-medium text-slate-600 cursor-pointer select-none hover:text-slate-800 ${col.className}`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        <SortIcon size={12} className={sortConfig.key === col.key ? 'text-slate-800' : 'text-slate-300'} />
+                      </span>
+                    </th>
+                  )
+                })}
                 <th className="w-20"></th>
               </tr>
             </thead>
