@@ -35,11 +35,16 @@ export default function Dashboard({ data, addWeeklyAction, updateWeeklyAction, d
     { phase: 'Close', period: 'Jun-Jul', status: 'upcoming' },
   ]
 
-  const handleAddAction = () => {
-    const newAction = { action: 'New action', owner: '', due: '', status: 'Not Started' }
-    addWeeklyAction(newAction).then(action => {
-      setEditingAction(action.id)
-    })
+  const handleAddAction = async () => {
+    try {
+      const newAction = { action: 'New action', owner: '', due: '', status: 'Not Started' }
+      const action = await addWeeklyAction(newAction)
+      if (action?.id) {
+        setEditingAction(action.id)
+      }
+    } catch (err) {
+      console.error('Failed to add action:', err)
+    }
   }
 
   // Weekly Report Generator

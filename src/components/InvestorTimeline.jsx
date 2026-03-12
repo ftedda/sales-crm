@@ -15,7 +15,8 @@ import {
   MailOpen,
   MousePointerClick,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  ListTodo
 } from 'lucide-react'
 
 const ACTIVITY_TYPES = {
@@ -83,10 +84,13 @@ export default function InvestorTimeline({
   timeline,
   onClose,
   onAddNote,
+  onAddAction,
   lastTouched
 }) {
   const [newNote, setNewNote] = useState('')
   const [isAddingNote, setIsAddingNote] = useState(false)
+  const [isAddingAction, setIsAddingAction] = useState(false)
+  const [newAction, setNewAction] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
 
   const handleAddNote = async () => {
@@ -94,6 +98,17 @@ export default function InvestorTimeline({
     await onAddNote(newNote.trim())
     setNewNote('')
     setIsAddingNote(false)
+  }
+
+  const handleAddAction = async () => {
+    if (!newAction.trim() || !onAddAction) return
+    try {
+      await onAddAction(newAction.trim())
+      setNewAction('')
+      setIsAddingAction(false)
+    } catch (err) {
+      console.error('Failed to add action:', err)
+    }
   }
 
   // Calculate activity stats
@@ -212,7 +227,7 @@ export default function InvestorTimeline({
           </div>
         )}
 
-        {/* Quick Add Note */}
+        {/* Quick Add Note / Action */}
         <div className="p-3 border-b bg-slate-50">
           {isAddingNote ? (
             <div className="space-y-2">
@@ -241,14 +256,52 @@ export default function InvestorTimeline({
                 </button>
               </div>
             </div>
+          ) : isAddingAction ? (
+            <div className="space-y-2">
+              <input
+                value={newAction}
+                onChange={(e) => setNewAction(e.target.value)}
+                placeholder="Action item... (e.g., 'Send follow-up deck')"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddAction() }}
+              />
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleAddAction}
+                  disabled={!newAction.trim()}
+                  className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-1.5 rounded text-sm disabled:opacity-50 hover:bg-blue-700"
+                >
+                  <ListTodo size={14} />
+                  <span>Add Action</span>
+                </button>
+                <button
+                  onClick={() => { setIsAddingAction(false); setNewAction(''); }}
+                  className="px-3 py-1.5 bg-slate-100 rounded text-sm hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           ) : (
-            <button
-              onClick={() => setIsAddingNote(true)}
-              className="flex items-center space-x-2 text-sm text-slate-600 hover:text-slate-800 transition-colors w-full p-2 hover:bg-white rounded-lg"
-            >
-              <MessageCircle size={16} />
-              <span>Add a quick note...</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAddingNote(true)}
+                className="flex items-center space-x-2 text-sm text-slate-600 hover:text-slate-800 transition-colors flex-1 p-2 hover:bg-white rounded-lg"
+              >
+                <MessageCircle size={16} />
+                <span>Add a quick note...</span>
+              </button>
+              {onAddAction && (
+                <button
+                  onClick={() => setIsAddingAction(true)}
+                  className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 transition-colors p-2 hover:bg-white rounded-lg"
+                >
+                  <ListTodo size={16} />
+                  <span>Add action</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
 

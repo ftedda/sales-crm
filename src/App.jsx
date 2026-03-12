@@ -193,6 +193,7 @@ export default function App() {
             updateInvestor={updateInvestor}
             deleteInvestor={deleteInvestor}
             addQuickNote={addQuickNote}
+            addWeeklyAction={addWeeklyAction}
             getInvestorTimeline={getInvestorTimeline}
             getLastTouched={getLastTouched}
           />
