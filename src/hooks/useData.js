@@ -457,6 +457,8 @@ export function useData(userId, orgId) {
 
   const addWeeklyAction = useCallback(async (action) => {
     const newAction = { ...action, id: Date.now(), created_at: new Date().toISOString() }
+    // Convert empty due string to null (PostgreSQL date column rejects '')
+    if (!newAction.due) newAction.due = null
 
     if (supabase && orgId) {
       const { data: inserted, error } = await supabase
@@ -475,14 +477,18 @@ export function useData(userId, orgId) {
   }, [data, saveData, userId, orgId])
 
   const updateWeeklyAction = useCallback(async (id, updates) => {
+    // Convert empty due string to null for PostgreSQL date column
+    const sanitized = { ...updates }
+    if ('due' in sanitized && !sanitized.due) sanitized.due = null
+
     if (supabase && orgId) {
-      const { error } = await supabase.from('weekly_actions').update(updates).eq('id', id)
+      const { error } = await supabase.from('weekly_actions').update(sanitized).eq('id', id)
       if (error) throw error
     }
 
     const newData = {
       ...data,
-      weeklyActions: data.weeklyActions.map(a => a.id === id ? { ...a, ...updates } : a)
+      weeklyActions: data.weeklyActions.map(a => a.id === id ? { ...a, ...sanitized } : a)
     }
     saveData(newData)
   }, [data, saveData, orgId])
