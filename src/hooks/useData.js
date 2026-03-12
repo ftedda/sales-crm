@@ -704,7 +704,19 @@ export function useData(userId, orgId) {
         source: 'reference'
       }))
 
-    return [...activities, ...emails, ...meetings, ...references]
+    const firmPrefix = `[${investorFirm}] `
+    const actions = (data.weeklyActions || [])
+      .filter(a => a.action?.startsWith(firmPrefix))
+      .map(a => ({
+        id: `action-${a.id}`,
+        type: 'action',
+        description: a.action.replace(firmPrefix, ''),
+        timestamp: a.created_at,
+        actionStatus: a.status,
+        source: 'action'
+      }))
+
+    return [...activities, ...emails, ...meetings, ...references, ...actions]
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
   }, [data])
 

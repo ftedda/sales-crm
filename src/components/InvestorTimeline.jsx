@@ -24,6 +24,7 @@ const ACTIVITY_TYPES = {
   meeting: { label: 'Meeting', icon: Calendar, color: 'text-purple-500 bg-purple-50', borderColor: 'border-purple-200' },
   stage_change: { label: 'Stage Change', icon: ArrowRightLeft, color: 'text-orange-500 bg-orange-50', borderColor: 'border-orange-200' },
   note: { label: 'Note', icon: StickyNote, color: 'text-green-500 bg-green-50', borderColor: 'border-green-200' },
+  action: { label: 'Action', icon: ListTodo, color: 'text-indigo-500 bg-indigo-50', borderColor: 'border-indigo-200' },
   created: { label: 'Created', icon: PlusCircle, color: 'text-slate-500 bg-slate-50', borderColor: 'border-slate-200' },
   reference: { label: 'Reference', icon: Users, color: 'text-pink-500 bg-pink-50', borderColor: 'border-pink-200' }
 }
@@ -143,6 +144,8 @@ export default function InvestorTimeline({
         return 'Stage changed'
       case 'note':
         return 'Note'
+      case 'action':
+        return 'Action'
       case 'created':
         return 'Added to pipeline'
       case 'reference':
@@ -411,6 +414,15 @@ export default function InvestorTimeline({
                             'bg-yellow-50 text-yellow-700'
                           }`}>
                             {item.status}
+                          </div>
+                        )}
+
+                        {item.type === 'action' && item.actionStatus && (
+                          <div className={`mt-2 text-xs px-2 py-1 rounded inline-flex items-center gap-1 ${
+                            item.actionStatus === 'Complete' ? 'bg-green-50 text-green-700' : 'bg-indigo-50 text-indigo-700'
+                          }`}>
+                            {item.actionStatus === 'Complete' && <CheckCircle size={12} />}
+                            {item.actionStatus}
                           </div>
                         )}
                       </div>
