@@ -15,6 +15,7 @@ const STAGE_COLORS = {
 
 export default function Dashboard({ data, addWeeklyAction, updateWeeklyAction, deleteWeeklyAction, exportToCSV }) {
   const [editingAction, setEditingAction] = useState(null)
+  const [showCompleted, setShowCompleted] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -281,14 +282,26 @@ ${pendingActions.length > 0
       <div className="bg-white rounded-lg p-4 shadow-sm border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-700">This Week's Actions</h2>
-          <button onClick={handleAddAction} className="text-slate-500 hover:text-slate-700">
-            <PlusCircle size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {(data.weeklyActions || []).some(a => a.status === 'Complete') && (
+              <button
+                onClick={() => setShowCompleted(!showCompleted)}
+                className="text-xs text-slate-500 hover:text-slate-700"
+              >
+                {showCompleted ? 'Hide completed' : `Show completed (${(data.weeklyActions || []).filter(a => a.status === 'Complete').length})`}
+              </button>
+            )}
+            <button onClick={handleAddAction} className="text-slate-500 hover:text-slate-700">
+              <PlusCircle size={18} />
+            </button>
+          </div>
         </div>
         <div className="space-y-2">
-          {(data.weeklyActions || []).map(action => (
+          {(data.weeklyActions || [])
+            .filter(action => showCompleted || action.status !== 'Complete')
+            .map(action => (
             <div key={action.id} className="flex items-center space-x-2 p-2 bg-slate-50 rounded text-sm">
-              <button 
+              <button
                 onClick={() => updateWeeklyAction(action.id, { status: action.status === 'Complete' ? 'Not Started' : 'Complete' })}
                 className={`flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center ${action.status === 'Complete' ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300'}`}
               >
@@ -296,21 +309,21 @@ ${pendingActions.length > 0
               </button>
               {editingAction === action.id ? (
                 <>
-                  <input 
-                    value={action.action} 
+                  <input
+                    value={action.action}
                     onChange={e => updateWeeklyAction(action.id, { action: e.target.value })}
                     className="flex-1 px-2 py-1 border rounded text-sm"
                     autoFocus
                   />
-                  <input 
-                    value={action.owner || ''} 
+                  <input
+                    value={action.owner || ''}
                     onChange={e => updateWeeklyAction(action.id, { owner: e.target.value })}
                     placeholder="Owner"
                     className="w-20 px-2 py-1 border rounded text-sm"
                   />
-                  <input 
+                  <input
                     type="date"
-                    value={action.due || ''} 
+                    value={action.due || ''}
                     onChange={e => updateWeeklyAction(action.id, { due: e.target.value })}
                     className="px-2 py-1 border rounded text-sm"
                   />
@@ -335,6 +348,9 @@ ${pendingActions.length > 0
           ))}
           {(!data.weeklyActions || data.weeklyActions.length === 0) && (
             <p className="text-slate-400 text-sm text-center py-2">No actions yet. Click + to add.</p>
+          )}
+          {data.weeklyActions?.length > 0 && !showCompleted && !(data.weeklyActions || []).some(a => a.status !== 'Complete') && (
+            <p className="text-slate-400 text-sm text-center py-2">All actions completed!</p>
           )}
         </div>
       </div>
