@@ -41,6 +41,14 @@ const termSheetFromDB = (obj) => {
   return result
 }
 
+// Extract #hashtags from action text and merge with existing tags
+function extractTags(actionText, existingTags) {
+  const found = [...(actionText || '').matchAll(/#(\w+)/g)].map(m => m[1].toLowerCase())
+  const existing = existingTags ? existingTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : []
+  const merged = [...new Set([...existing, ...found])]
+  return merged.length ? merged.join(',') : null
+}
+
 const defaultMaterials = [
   { name: 'Executive Summary (2 pages)', tier: '1', status: 'Not Started', owner: '', sort_order: 1 },
   { name: 'High-Level Metrics Snapshot', tier: '1', status: 'Not Started', owner: '', sort_order: 2 },
@@ -459,6 +467,8 @@ export function useData(userId, orgId) {
     const newAction = { ...action, id: Date.now(), created_at: new Date().toISOString() }
     // Convert empty due string to null (PostgreSQL date column rejects '')
     if (!newAction.due) newAction.due = null
+    // Extract tags from action text and merge with explicit tags
+    newAction.tags = extractTags(newAction.action, newAction.tags)
 
     if (supabase && orgId) {
       const { data: inserted, error } = await supabase
@@ -480,6 +490,11 @@ export function useData(userId, orgId) {
     // Convert empty due string to null for PostgreSQL date column
     const sanitized = { ...updates }
     if ('due' in sanitized && !sanitized.due) sanitized.due = null
+    // Re-extract tags when action text changes
+    if ('action' in sanitized) {
+      const existing = data.weeklyActions.find(a => a.id === id)
+      sanitized.tags = extractTags(sanitized.action, sanitized.tags ?? existing?.tags)
+    }
 
     if (supabase && orgId) {
       const { error } = await supabase.from('weekly_actions').update(sanitized).eq('id', id)
@@ -706,11 +721,11 @@ export function useData(userId, orgId) {
 
     const firmPrefix = `[${investorFirm}] `
     const actions = (data.weeklyActions || [])
-      .filter(a => a.action?.startsWith(firmPrefix))
+      .filter(a => a.investor_id === investorId || a.action?.startsWith(firmPrefix))
       .map(a => ({
         id: `action-${a.id}`,
         type: 'action',
-        description: a.action.replace(firmPrefix, ''),
+        description: a.investor_id === investorId ? a.action : a.action.replace(firmPrefix, ''),
         timestamp: a.created_at,
         actionStatus: a.status,
         source: 'action'

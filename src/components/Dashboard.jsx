@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { PlusCircle, Trash2, Check, Edit3, ArrowRight, AlertCircle, Building2, Users, Target, DollarSign, Download, FileText, X, Copy, CheckCircle } from 'lucide-react'
+import { ArrowRight, AlertCircle, Building2, Users, Target, DollarSign, Download, FileText, X, Copy, CheckCircle, ChevronRight } from 'lucide-react'
 
 const STAGES = ['Target List', 'Contacted', 'Engaged', 'In Diligence', 'Term Sheet', 'Closing', 'Closed', 'Passed']
 const STAGE_COLORS = {
@@ -13,9 +13,7 @@ const STAGE_COLORS = {
   'Passed': 'bg-red-100'
 }
 
-export default function Dashboard({ data, addWeeklyAction, updateWeeklyAction, deleteWeeklyAction, exportToCSV }) {
-  const [editingAction, setEditingAction] = useState(null)
-  const [showCompleted, setShowCompleted] = useState(false)
+export default function Dashboard({ data, exportToCSV, onNavigateToActions }) {
   const [showReportModal, setShowReportModal] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -35,18 +33,6 @@ export default function Dashboard({ data, addWeeklyAction, updateWeeklyAction, d
     { phase: 'Term Sheets', period: 'May', status: 'upcoming' },
     { phase: 'Close', period: 'Jun-Jul', status: 'upcoming' },
   ]
-
-  const handleAddAction = async () => {
-    try {
-      const newAction = { action: 'New action', owner: '', due: '', status: 'Not Started' }
-      const action = await addWeeklyAction(newAction)
-      if (action?.id) {
-        setEditingAction(action.id)
-      }
-    } catch (err) {
-      console.error('Failed to add action:', err)
-    }
-  }
 
   // Weekly Report Generator
   const generateReport = () => {
@@ -278,80 +264,54 @@ ${pendingActions.length > 0
         </div>
       </div>
 
-      {/* Weekly Actions */}
+      {/* Recent Actions Summary */}
       <div className="bg-white rounded-lg p-4 shadow-sm border">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-700">This Week's Actions</h2>
-          <div className="flex items-center gap-2">
-            {(data.weeklyActions || []).some(a => a.status === 'Complete') && (
-              <button
-                onClick={() => setShowCompleted(!showCompleted)}
-                className="text-xs text-slate-500 hover:text-slate-700"
-              >
-                {showCompleted ? 'Hide completed' : `Show completed (${(data.weeklyActions || []).filter(a => a.status === 'Complete').length})`}
-              </button>
-            )}
-            <button onClick={handleAddAction} className="text-slate-500 hover:text-slate-700">
-              <PlusCircle size={18} />
+          <h2 className="text-sm font-semibold text-slate-700">Recent Actions</h2>
+          {onNavigateToActions && (
+            <button
+              onClick={onNavigateToActions}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+            >
+              View All ({(data.weeklyActions || []).length})
+              <ChevronRight size={14} />
             </button>
-          </div>
+          )}
         </div>
         <div className="space-y-2">
-          {(data.weeklyActions || [])
-            .filter(action => showCompleted || action.status !== 'Complete')
-            .map(action => (
-            <div key={action.id} className="flex items-center space-x-2 p-2 bg-slate-50 rounded text-sm">
-              <button
-                onClick={() => updateWeeklyAction(action.id, { status: action.status === 'Complete' ? 'Not Started' : 'Complete' })}
-                className={`flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center ${action.status === 'Complete' ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300'}`}
-              >
-                {action.status === 'Complete' && <Check size={12} />}
-              </button>
-              {editingAction === action.id ? (
-                <>
-                  <input
-                    value={action.action}
-                    onChange={e => updateWeeklyAction(action.id, { action: e.target.value })}
-                    className="flex-1 px-2 py-1 border rounded text-sm"
-                    autoFocus
-                  />
-                  <input
-                    value={action.owner || ''}
-                    onChange={e => updateWeeklyAction(action.id, { owner: e.target.value })}
-                    placeholder="Owner"
-                    className="w-20 px-2 py-1 border rounded text-sm"
-                  />
-                  <input
-                    type="date"
-                    value={action.due || ''}
-                    onChange={e => updateWeeklyAction(action.id, { due: e.target.value })}
-                    className="px-2 py-1 border rounded text-sm"
-                  />
-                  <button onClick={() => setEditingAction(null)} className="text-green-600">
-                    <Check size={16} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className={`flex-1 ${action.status === 'Complete' ? 'line-through text-slate-400' : ''}`}>{action.action}</span>
-                  <span className="text-slate-500 text-xs">{action.owner}</span>
-                  <span className="text-slate-400 text-xs">{action.due}</span>
-                  <button onClick={() => setEditingAction(action.id)} className="text-slate-400 hover:text-slate-600">
-                    <Edit3 size={14} />
-                  </button>
-                  <button onClick={() => deleteWeeklyAction(action.id)} className="text-red-400 hover:text-red-600">
-                    <Trash2 size={14} />
-                  </button>
-                </>
-              )}
-            </div>
-          ))}
-          {(!data.weeklyActions || data.weeklyActions.length === 0) && (
-            <p className="text-slate-400 text-sm text-center py-2">No actions yet. Click + to add.</p>
-          )}
-          {data.weeklyActions?.length > 0 && !showCompleted && !(data.weeklyActions || []).some(a => a.status !== 'Complete') && (
-            <p className="text-slate-400 text-sm text-center py-2">All actions completed!</p>
-          )}
+          {(() => {
+            const incomplete = (data.weeklyActions || [])
+              .filter(a => a.status !== 'Complete')
+              .sort((a, b) => {
+                if (a.due && b.due) return a.due.localeCompare(b.due)
+                if (a.due) return -1
+                if (b.due) return 1
+                return new Date(b.created_at) - new Date(a.created_at)
+              })
+              .slice(0, 5)
+            const today = new Date().toISOString().split('T')[0]
+
+            if (incomplete.length === 0) {
+              const hasActions = (data.weeklyActions || []).length > 0
+              return (
+                <p className="text-slate-400 text-sm text-center py-2">
+                  {hasActions ? 'All actions completed!' : 'No actions yet.'}
+                </p>
+              )
+            }
+
+            return incomplete.map(action => (
+              <div key={action.id} className="flex items-center space-x-2 p-2 bg-slate-50 rounded text-sm">
+                <span className={`flex-shrink-0 w-2 h-2 rounded-full ${action.due && action.due < today ? 'bg-red-500' : 'bg-slate-300'}`} />
+                <span className="flex-1 truncate text-slate-700">{action.action}</span>
+                {action.due && (
+                  <span className={`text-xs flex-shrink-0 ${action.due < today ? 'text-red-600 font-medium' : 'text-slate-400'}`}>
+                    {action.due}
+                  </span>
+                )}
+              </div>
+            ))
+          })()}
         </div>
       </div>
 

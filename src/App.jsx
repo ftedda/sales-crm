@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, HeartHandshake, PieChart, TrendingUp } from 'lucide-react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, HeartHandshake, PieChart, TrendingUp, ListTodo } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase, getUserOrg } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -12,6 +12,7 @@ import TermSheets from './components/TermSheets'
 import ReferenceCoordination from './components/ReferenceCoordination'
 import CapTable from './components/CapTable'
 import FunnelAnalytics from './components/FunnelAnalytics'
+import Actions from './components/Actions'
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = no user
@@ -109,6 +110,7 @@ export default function App() {
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'actions', label: 'Actions', icon: ListTodo },
     { id: 'pipeline', label: 'Pipeline', icon: Users },
     { id: 'emails', label: 'Emails', icon: Mail },
     { id: 'meetings', label: 'Meetings', icon: Calendar },
@@ -180,10 +182,16 @@ export default function App() {
         {activeTab === 'dashboard' && (
           <Dashboard
             data={data}
+            exportToCSV={exportToCSV}
+            onNavigateToActions={() => setActiveTab('actions')}
+          />
+        )}
+        {activeTab === 'actions' && (
+          <Actions
+            data={data}
             addWeeklyAction={addWeeklyAction}
             updateWeeklyAction={updateWeeklyAction}
             deleteWeeklyAction={deleteWeeklyAction}
-            exportToCSV={exportToCSV}
           />
         )}
         {activeTab === 'pipeline' && (

@@ -464,7 +464,9 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
               action: `[${selectedInvestor.firm}] ${actionText}`,
               owner: '',
               due: '',
-              status: 'Not Started'
+              status: 'Not Started',
+              investor_id: selectedInvestor.id,
+              investor_firm: selectedInvestor.firm,
             }
             await addWeeklyAction(newAction)
           } : null}

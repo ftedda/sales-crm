@@ -133,6 +133,9 @@ create table if not exists public.weekly_actions (
   due date,
   priority text default 'Medium',
   status text default 'Not Started',
+  investor_id bigint references public.investors(id) on delete set null,
+  investor_firm text,
+  tags text,
   created_at timestamptz default now()
 );
 
@@ -408,6 +411,7 @@ create index if not exists idx_term_sheets_user_id on public.term_sheets(user_id
 create index if not exists idx_term_sheets_org_id on public.term_sheets(org_id);
 create index if not exists idx_weekly_actions_user_id on public.weekly_actions(user_id);
 create index if not exists idx_weekly_actions_org_id on public.weekly_actions(org_id);
+create index if not exists idx_weekly_actions_investor_id on public.weekly_actions(investor_id);
 create index if not exists idx_references_user_id on public.references(user_id);
 create index if not exists idx_references_org_id on public.references(org_id);
 create index if not exists idx_investor_activities_user_id on public.investor_activities(user_id);
