@@ -725,7 +725,7 @@ export function useData(userId, orgId) {
       .map(a => ({
         id: `action-${a.id}`,
         type: 'action',
-        description: a.investor_id === investorId ? a.action : a.action.replace(firmPrefix, ''),
+        description: a.action?.startsWith(firmPrefix) ? a.action.replace(firmPrefix, '') : a.action,
         timestamp: a.created_at,
         actionStatus: a.status,
         source: 'action'

@@ -44,6 +44,25 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
     return map
   }, [data.investors])
 
+  const firmToInvestor = useMemo(() => {
+    const map = new Map()
+    ;(data.investors || []).forEach(inv => { if (inv.firm) map.set(inv.firm, inv) })
+    return map
+  }, [data.investors])
+
+  // Resolve investor info: use FK if set, otherwise parse [FirmName] prefix
+  const getActionInvestor = (action) => {
+    if (action.investor_id) return investorMap.get(action.investor_id) || null
+    if (action.investor_firm) return firmToInvestor.get(action.investor_firm) || null
+    const match = action.action?.match(/^\[([^\]]+)\]\s/)
+    if (match) return firmToInvestor.get(match[1]) || null
+    return null
+  }
+
+  const getActionDisplayText = (action) => {
+    return action.action?.replace(/^\[[^\]]+\]\s*/, '') || action.action
+  }
+
   const uniqueFirms = useMemo(() => {
     const firms = new Set()
     ;(data.investors || []).forEach(inv => { if (inv.firm) firms.add(inv.firm) })
@@ -67,14 +86,16 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
 
     // Investor filter
     if (investorFilter !== 'all') {
-      result = result.filter(a => a.investor_firm === investorFilter)
+      result = result.filter(a => {
+        const inv = getActionInvestor(a)
+        return inv && inv.firm === investorFilter
+      })
     }
 
     // Stage filter
     if (stageFilter !== 'all') {
       result = result.filter(a => {
-        if (!a.investor_id) return false
-        const inv = investorMap.get(a.investor_id)
+        const inv = getActionInvestor(a)
         return inv && inv.stage === stageFilter
       })
     }
@@ -280,7 +301,8 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
       <div className="space-y-2">
         {filteredActions.map(action => {
           const actionTags = action.tags ? action.tags.split(',').map(t => t.trim()).filter(Boolean) : []
-          const linkedInvestor = action.investor_id ? investorMap.get(action.investor_id) : null
+          const resolvedInvestor = getActionInvestor(action)
+          const displayText = getActionDisplayText(action)
           const overdue = isOverdue(action)
 
           return (
@@ -307,7 +329,7 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
                     />
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <select
-                        value={action.investor_id || ''}
+                        value={action.investor_id || resolvedInvestor?.id || ''}
                         onChange={e => {
                           const inv = e.target.value ? investorMap.get(Number(e.target.value)) : null
                           updateWeeklyAction(action.id, {
@@ -349,7 +371,7 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className={`text-sm ${action.status === 'Complete' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
-                        {action.action}
+                        {displayText}
                       </span>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button onClick={() => setEditingAction(action.id)} className="text-slate-400 hover:text-slate-600 p-1">
@@ -363,12 +385,12 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
 
                     {/* Meta row: tags, investor, owner, due */}
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      {action.investor_firm && (
+                      {resolvedInvestor && (
                         <button
-                          onClick={() => setInvestorFilter(action.investor_firm)}
+                          onClick={() => setInvestorFilter(resolvedInvestor.firm)}
                           className="px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200"
                         >
-                          {action.investor_firm}
+                          {resolvedInvestor.firm}
                         </button>
                       )}
                       {actionTags.map(tag => (

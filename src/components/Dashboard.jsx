@@ -267,7 +267,7 @@ ${pendingActions.length > 0
       {/* Recent Actions Summary */}
       <div className="bg-white rounded-lg p-4 shadow-sm border">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-700">Recent Actions</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Last 5 actions added</h2>
           {onNavigateToActions && (
             <button
               onClick={onNavigateToActions}
