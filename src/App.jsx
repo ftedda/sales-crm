@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, HeartHandshake, PieChart, TrendingUp, ListTodo, FolderLock } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, HeartHandshake, PieChart, TrendingUp, ListTodo, FolderLock, ChevronDown, MoreHorizontal } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase, getUserOrg } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -19,6 +19,8 @@ export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = no user
   const [orgId, setOrgId] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [showOtherMenu, setShowOtherMenu] = useState(false)
+  const otherMenuRef = useRef(null)
 
   const {
     data,
@@ -89,6 +91,17 @@ export default function App() {
     }
   }, [user])
 
+  // Close "Others" dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (otherMenuRef.current && !otherMenuRef.current.contains(e.target)) {
+        setShowOtherMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const handleSignOut = async () => {
     try {
       await signOut()
@@ -97,6 +110,26 @@ export default function App() {
       console.error('Sign out error:', e)
     }
   }
+
+  const primaryTabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'actions', label: 'Actions', icon: ListTodo },
+    { id: 'pipeline', label: 'Pipeline', icon: Users },
+    { id: 'dataroom', label: 'Data Room', icon: FolderLock },
+  ]
+
+  const otherTabs = [
+    { id: 'emails', label: 'Emails', icon: Mail },
+    { id: 'meetings', label: 'Meetings', icon: Calendar },
+    { id: 'materials', label: 'Materials', icon: FileText },
+    { id: 'references', label: 'References', icon: HeartHandshake },
+    { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
+    { id: 'captable', label: 'Cap Table', icon: PieChart },
+    { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+  ]
+
+  const isOtherTabActive = otherTabs.some(t => t.id === activeTab)
+  const activeOtherTab = otherTabs.find(t => t.id === activeTab)
 
   // Show loading while checking auth
   if (user === undefined) {
@@ -111,20 +144,6 @@ export default function App() {
   if (supabase && user === null) {
     return <Auth onAuth={setUser} />
   }
-
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'actions', label: 'Actions', icon: ListTodo },
-    { id: 'pipeline', label: 'Pipeline', icon: Users },
-    { id: 'emails', label: 'Emails', icon: Mail },
-    { id: 'meetings', label: 'Meetings', icon: Calendar },
-    { id: 'materials', label: 'Materials', icon: FileText },
-    { id: 'dataroom', label: 'Data Room', icon: FolderLock },
-    { id: 'references', label: 'References', icon: HeartHandshake },
-    { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
-    { id: 'captable', label: 'Cap Table', icon: PieChart },
-    { id: 'analytics', label: 'Analytics', icon: TrendingUp },
-  ]
 
   if (loading) {
     return (
@@ -157,11 +176,11 @@ export default function App() {
 
       {/* Navigation */}
       <div className="bg-white border-b shadow-sm sticky top-0 z-10">
-        <div className="flex overflow-x-auto">
-          {tabs.map(tab => (
+        <div className="flex">
+          {primaryTabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => { setActiveTab(tab.id); setShowOtherMenu(false) }}
               className={`flex items-center space-x-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-slate-800 text-slate-800 bg-slate-50'
@@ -172,6 +191,48 @@ export default function App() {
               <span>{tab.label}</span>
             </button>
           ))}
+          {/* Others dropdown */}
+          <div className="relative" ref={otherMenuRef}>
+            <button
+              onClick={() => setShowOtherMenu(prev => !prev)}
+              className={`flex items-center space-x-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                isOtherTabActive
+                  ? 'border-slate-800 text-slate-800 bg-slate-50'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {isOtherTabActive ? (
+                <>
+                  <activeOtherTab.icon size={14} />
+                  <span>{activeOtherTab.label}</span>
+                </>
+              ) : (
+                <>
+                  <MoreHorizontal size={14} />
+                  <span>Others</span>
+                </>
+              )}
+              <ChevronDown size={12} className={`transition-transform ${showOtherMenu ? 'rotate-180' : ''}`} />
+            </button>
+            {showOtherMenu && (
+              <div className="absolute top-full left-0 mt-0.5 bg-white border rounded-lg shadow-lg py-1 z-20 min-w-[160px]">
+                {otherTabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => { setActiveTab(tab.id); setShowOtherMenu(false) }}
+                    className={`w-full flex items-center space-x-2 px-3 py-2 text-xs transition-colors ${
+                      activeTab === tab.id
+                        ? 'bg-slate-100 text-slate-800 font-medium'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                    }`}
+                  >
+                    <tab.icon size={14} />
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
