@@ -223,6 +223,23 @@ create table if not exists public.weekly_snapshots (
   unique(org_id, week_start)
 );
 
+-- Data Room Entries table (for tracking investor data room access)
+create table if not exists public.data_room_entries (
+  id bigserial primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  org_id uuid references public.organizations(id) not null,
+  fund text not null,
+  main_contact text,
+  other_contacts text,
+  nda_status text default '',
+  target_access text default '',
+  current_access text default '',
+  email_addresses text,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 -- ============================================================
 -- Enable Row Level Security on all tables
 -- ============================================================
@@ -240,6 +257,7 @@ alter table public.investor_activities enable row level security;
 alter table public.cap_table_shareholders enable row level security;
 alter table public.cap_table_options enable row level security;
 alter table public.weekly_snapshots enable row level security;
+alter table public.data_room_entries enable row level security;
 
 -- ============================================================
 -- SECURITY DEFINER helper functions (bypass RLS)
@@ -392,6 +410,16 @@ create policy "Org members can update weekly_snapshots" on public.weekly_snapsho
 create policy "Org members can delete weekly_snapshots" on public.weekly_snapshots for delete
   using (public.is_org_member(org_id));
 
+-- data_room_entries
+create policy "Org members can select data_room_entries" on public.data_room_entries for select
+  using (public.is_org_member(org_id));
+create policy "Org members can insert data_room_entries" on public.data_room_entries for insert
+  with check (public.is_org_member(org_id));
+create policy "Org members can update data_room_entries" on public.data_room_entries for update
+  using (public.is_org_member(org_id));
+create policy "Org members can delete data_room_entries" on public.data_room_entries for delete
+  using (public.is_org_member(org_id));
+
 -- ============================================================
 -- Indexes
 -- ============================================================
@@ -424,6 +452,8 @@ create index if not exists idx_cap_table_options_org_id on public.cap_table_opti
 create index if not exists idx_weekly_snapshots_user_id on public.weekly_snapshots(user_id);
 create index if not exists idx_weekly_snapshots_org_id on public.weekly_snapshots(org_id);
 create index if not exists idx_weekly_snapshots_week_start on public.weekly_snapshots(week_start);
+create index if not exists idx_data_room_entries_user_id on public.data_room_entries(user_id);
+create index if not exists idx_data_room_entries_org_id on public.data_room_entries(org_id);
 
 -- ============================================================
 -- Triggers
@@ -453,5 +483,11 @@ create trigger update_cap_table_shareholders_updated_at
 -- Trigger for cap_table_options
 create trigger update_cap_table_options_updated_at
   before update on public.cap_table_options
+  for each row
+  execute function update_updated_at_column();
+
+-- Trigger for data_room_entries
+create trigger update_data_room_entries_updated_at
+  before update on public.data_room_entries
   for each row
   execute function update_updated_at_column();

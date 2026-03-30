@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, HeartHandshake, PieChart, TrendingUp, ListTodo } from 'lucide-react'
+import { Users, Mail, Calendar, FileText, DollarSign, BarChart3, LogOut, HeartHandshake, PieChart, TrendingUp, ListTodo, FolderLock } from 'lucide-react'
 import { onAuthStateChange, signOut, supabase, getUserOrg } from './lib/supabase'
 import { useData } from './hooks/useData'
 import Auth from './components/Auth'
@@ -13,6 +13,7 @@ import ReferenceCoordination from './components/ReferenceCoordination'
 import CapTable from './components/CapTable'
 import FunnelAnalytics from './components/FunnelAnalytics'
 import Actions from './components/Actions'
+import DataRoomAccess from './components/DataRoomAccess'
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = no user
@@ -45,6 +46,9 @@ export default function App() {
     addReference,
     updateReference,
     deleteReference,
+    addDataRoomEntry,
+    updateDataRoomEntry,
+    deleteDataRoomEntry,
     addShareholder,
     updateShareholder,
     deleteShareholder,
@@ -115,6 +119,7 @@ export default function App() {
     { id: 'emails', label: 'Emails', icon: Mail },
     { id: 'meetings', label: 'Meetings', icon: Calendar },
     { id: 'materials', label: 'Materials', icon: FileText },
+    { id: 'dataroom', label: 'Data Room', icon: FolderLock },
     { id: 'references', label: 'References', icon: HeartHandshake },
     { id: 'termsheets', label: 'Term Sheets', icon: DollarSign },
     { id: 'captable', label: 'Cap Table', icon: PieChart },
@@ -229,6 +234,14 @@ export default function App() {
             updateMaterial={updateMaterial}
             deleteMaterial={deleteMaterial}
             reorderMaterials={reorderMaterials}
+          />
+        )}
+        {activeTab === 'dataroom' && (
+          <DataRoomAccess
+            data={data}
+            addDataRoomEntry={addDataRoomEntry}
+            updateDataRoomEntry={updateDataRoomEntry}
+            deleteDataRoomEntry={deleteDataRoomEntry}
           />
         )}
         {activeTab === 'termsheets' && (

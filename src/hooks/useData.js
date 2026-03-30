@@ -74,7 +74,8 @@ const defaultData = {
   references: [],
   investorActivities: [],
   capTableShareholders: [],
-  capTableOptions: { allocated: 0, unallocated: 0 }
+  capTableOptions: { allocated: 0, unallocated: 0 },
+  dataRoomEntries: []
 }
 
 // Local storage fallback
@@ -113,7 +114,8 @@ export function useData(userId, orgId) {
           // Load from Supabase by org
           const [
             investors, emails, meetings, materials, termSheets, weeklyActions,
-            references, investorActivities, capTableShareholders, capTableOptions
+            references, investorActivities, capTableShareholders, capTableOptions,
+            dataRoomEntries
           ] = await Promise.all([
             supabase.from('investors').select('*').eq('org_id', orgId),
             supabase.from('emails').select('*').eq('org_id', orgId),
@@ -125,6 +127,7 @@ export function useData(userId, orgId) {
             supabase.from('investor_activities').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
             supabase.from('cap_table_shareholders').select('*').eq('org_id', orgId),
             supabase.from('cap_table_options').select('*').eq('org_id', orgId).single(),
+            supabase.from('data_room_entries').select('*').eq('org_id', orgId),
           ])
 
           // Seed materials if empty (new org)
@@ -148,7 +151,8 @@ export function useData(userId, orgId) {
             references: references.data || [],
             investorActivities: investorActivities.data || [],
             capTableShareholders: capTableShareholders.data || [],
-            capTableOptions: capTableOptions.data || { allocated: 0, unallocated: 0 }
+            capTableOptions: capTableOptions.data || { allocated: 0, unallocated: 0 },
+            dataRoomEntries: dataRoomEntries.data || []
           })
         } catch (e) {
           console.error('Supabase load error:', e)
@@ -561,6 +565,49 @@ export function useData(userId, orgId) {
     saveData(newData)
   }, [data, saveData, orgId])
 
+  // Data Room Entries CRUD
+  const addDataRoomEntry = useCallback(async (entry) => {
+    const newEntry = { ...entry, id: Date.now(), created_at: new Date().toISOString() }
+
+    if (supabase && orgId) {
+      const { data: inserted, error } = await supabase
+        .from('data_room_entries')
+        .insert({ ...newEntry, user_id: userId, org_id: orgId })
+        .select()
+        .single()
+
+      if (error) throw error
+      newEntry.id = inserted.id
+    }
+
+    const newData = { ...data, dataRoomEntries: [...data.dataRoomEntries, newEntry] }
+    saveData(newData)
+    return newEntry
+  }, [data, saveData, userId, orgId])
+
+  const updateDataRoomEntry = useCallback(async (id, updates) => {
+    if (supabase && orgId) {
+      const { error } = await supabase.from('data_room_entries').update(updates).eq('id', id)
+      if (error) throw error
+    }
+
+    const newData = {
+      ...data,
+      dataRoomEntries: data.dataRoomEntries.map(e => e.id === id ? { ...e, ...updates } : e)
+    }
+    saveData(newData)
+  }, [data, saveData, orgId])
+
+  const deleteDataRoomEntry = useCallback(async (id) => {
+    if (supabase && orgId) {
+      const { error } = await supabase.from('data_room_entries').delete().eq('id', id)
+      if (error) throw error
+    }
+
+    const newData = { ...data, dataRoomEntries: data.dataRoomEntries.filter(e => e.id !== id) }
+    saveData(newData)
+  }, [data, saveData, orgId])
+
   // Cap Table Shareholders CRUD
   const addShareholder = useCallback(async (shareholder) => {
     const newShareholder = { ...shareholder, id: Date.now(), created_at: new Date().toISOString() }
@@ -796,6 +843,10 @@ export function useData(userId, orgId) {
     addReference,
     updateReference,
     deleteReference,
+    // Data Room
+    addDataRoomEntry,
+    updateDataRoomEntry,
+    deleteDataRoomEntry,
     // Cap Table
     addShareholder,
     updateShareholder,
