@@ -9,6 +9,7 @@ import {
   Clock,
   Send,
   MessageCircle,
+  Check,
   CheckCircle,
   Filter,
   Users,
@@ -86,6 +87,7 @@ export default function InvestorTimeline({
   onClose,
   onAddNote,
   onAddAction,
+  onToggleAction,
   lastTouched
 }) {
   const [newNote, setNewNote] = useState('')
@@ -358,9 +360,31 @@ export default function InvestorTimeline({
                             {formatRelativeTime(item.timestamp)}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-600 break-words">
-                          {item.description}
-                        </p>
+                        {item.type === 'action' && onToggleAction ? (
+                          <div className="flex items-start gap-2">
+                            <button
+                              onClick={() => {
+                                const originalId = Number(item.id.replace('action-', ''))
+                                onToggleAction(originalId, { status: item.actionStatus === 'Complete' ? 'Not Started' : 'Complete' })
+                              }}
+                              className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                                item.actionStatus === 'Complete'
+                                  ? 'bg-green-500 border-green-500 text-white'
+                                  : 'border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                              }`}
+                              title={item.actionStatus === 'Complete' ? 'Mark as not started' : 'Mark as complete'}
+                            >
+                              {item.actionStatus === 'Complete' && <Check size={12} />}
+                            </button>
+                            <p className={`text-sm break-words ${item.actionStatus === 'Complete' ? 'text-slate-400 line-through' : 'text-slate-600'}`}>
+                              {item.description}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-600 break-words">
+                            {item.description}
+                          </p>
+                        )}
 
                         {/* Extra info for specific types */}
                         {item.type === 'email' && (
@@ -417,7 +441,7 @@ export default function InvestorTimeline({
                           </div>
                         )}
 
-                        {item.type === 'action' && item.actionStatus && (
+                        {item.type === 'action' && item.actionStatus && !onToggleAction && (
                           <div className={`mt-2 text-xs px-2 py-1 rounded inline-flex items-center gap-1 ${
                             item.actionStatus === 'Complete' ? 'bg-green-50 text-green-700' : 'bg-indigo-50 text-indigo-700'
                           }`}>

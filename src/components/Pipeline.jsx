@@ -24,7 +24,7 @@ const ENGAGEMENT_CONFIG = {
   none: { icon: Clock, color: 'text-slate-300', bg: 'bg-slate-50', label: 'None' }
 }
 
-export default function Pipeline({ data, addInvestor, updateInvestor, deleteInvestor, addQuickNote, addWeeklyAction, getInvestorTimeline, getLastTouched }) {
+export default function Pipeline({ data, addInvestor, updateInvestor, deleteInvestor, addQuickNote, addWeeklyAction, updateWeeklyAction, getInvestorTimeline, getLastTouched }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ firm: '', contact: '', email: '', tier: '2 - Strong Fit', stage: 'Target List', next_action: '', notes: '' })
   const [stageFilter, setStageFilter] = useState('all')
@@ -459,6 +459,7 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
               await addQuickNote(selectedInvestor.id, selectedInvestor.firm, note)
             }
           }}
+          onToggleAction={updateWeeklyAction}
           onAddAction={addWeeklyAction ? async (actionText) => {
             const newAction = {
               action: `[${selectedInvestor.firm}] ${actionText}`,
