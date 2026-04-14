@@ -2,8 +2,9 @@
 -- Run this in your Supabase SQL Editor
 -- Org-based RLS (team data sharing)
 
--- Enable Row Level Security
-alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
+-- Grants: only postgres and service_role get blanket access.
+-- authenticated gets per-table grants below. anon gets nothing.
+alter default privileges in schema public grant all on tables to postgres, service_role;
 
 -- ============================================================
 -- Organization tables
@@ -90,6 +91,16 @@ alter table public.contact_activities enable row level security;
 alter table public.weekly_actions enable row level security;
 
 -- ============================================================
+-- Per-table grants (authenticated only, anon gets nothing)
+-- ============================================================
+grant select, insert, update, delete on public.contacts to authenticated;
+grant select, insert, update, delete on public.contact_activities to authenticated;
+grant select, insert, update, delete on public.weekly_actions to authenticated;
+grant select on public.organizations to authenticated;
+grant select on public.org_members to authenticated;
+grant usage on all sequences in schema public to authenticated;
+
+-- ============================================================
 -- SECURITY DEFINER helper functions (bypass RLS)
 -- ============================================================
 
@@ -116,46 +127,71 @@ as $$
   );
 $$;
 
+-- Restrict function access to authenticated only
+revoke execute on function public.ensure_user_org(uuid) from anon, public;
+revoke execute on function public.get_user_org(uuid) from anon, public;
+revoke execute on function public.is_org_member(uuid) from anon, public;
+grant execute on function public.ensure_user_org(uuid) to authenticated;
+grant execute on function public.get_user_org(uuid) to authenticated;
+grant execute on function public.is_org_member(uuid) to authenticated;
+
 -- ============================================================
--- Org-based RLS policies
+-- Org-based RLS policies (authenticated role only)
 -- ============================================================
 
--- organizations
-create policy "Org members can view organizations" on public.organizations for select
+-- organizations (read-only)
+create policy "authenticated_select_organizations" on public.organizations
+  for select to authenticated
   using (public.is_org_member(id));
 
--- org_members
-create policy "Org members can view org_members" on public.org_members for select
+-- org_members (read-only)
+create policy "authenticated_select_org_members" on public.org_members
+  for select to authenticated
   using (public.is_org_member(org_id));
 
--- contacts
-create policy "Org members can select contacts" on public.contacts for select
+-- contacts (CRUD with user_id enforcement)
+create policy "authenticated_select_contacts" on public.contacts
+  for select to authenticated
   using (public.is_org_member(org_id));
-create policy "Org members can insert contacts" on public.contacts for insert
-  with check (public.is_org_member(org_id));
-create policy "Org members can update contacts" on public.contacts for update
-  using (public.is_org_member(org_id));
-create policy "Org members can delete contacts" on public.contacts for delete
-  using (public.is_org_member(org_id));
-
--- contact_activities
-create policy "Org members can select contact_activities" on public.contact_activities for select
-  using (public.is_org_member(org_id));
-create policy "Org members can insert contact_activities" on public.contact_activities for insert
-  with check (public.is_org_member(org_id));
-create policy "Org members can update contact_activities" on public.contact_activities for update
-  using (public.is_org_member(org_id));
-create policy "Org members can delete contact_activities" on public.contact_activities for delete
+create policy "authenticated_insert_contacts" on public.contacts
+  for insert to authenticated
+  with check (public.is_org_member(org_id) and user_id = auth.uid());
+create policy "authenticated_update_contacts" on public.contacts
+  for update to authenticated
+  using (public.is_org_member(org_id))
+  with check (public.is_org_member(org_id) and user_id = auth.uid());
+create policy "authenticated_delete_contacts" on public.contacts
+  for delete to authenticated
   using (public.is_org_member(org_id));
 
--- weekly_actions
-create policy "Org members can select weekly_actions" on public.weekly_actions for select
+-- contact_activities (CRUD with user_id enforcement)
+create policy "authenticated_select_contact_activities" on public.contact_activities
+  for select to authenticated
   using (public.is_org_member(org_id));
-create policy "Org members can insert weekly_actions" on public.weekly_actions for insert
-  with check (public.is_org_member(org_id));
-create policy "Org members can update weekly_actions" on public.weekly_actions for update
+create policy "authenticated_insert_contact_activities" on public.contact_activities
+  for insert to authenticated
+  with check (public.is_org_member(org_id) and user_id = auth.uid());
+create policy "authenticated_update_contact_activities" on public.contact_activities
+  for update to authenticated
+  using (public.is_org_member(org_id))
+  with check (public.is_org_member(org_id) and user_id = auth.uid());
+create policy "authenticated_delete_contact_activities" on public.contact_activities
+  for delete to authenticated
   using (public.is_org_member(org_id));
-create policy "Org members can delete weekly_actions" on public.weekly_actions for delete
+
+-- weekly_actions (CRUD with user_id enforcement)
+create policy "authenticated_select_weekly_actions" on public.weekly_actions
+  for select to authenticated
+  using (public.is_org_member(org_id));
+create policy "authenticated_insert_weekly_actions" on public.weekly_actions
+  for insert to authenticated
+  with check (public.is_org_member(org_id) and user_id = auth.uid());
+create policy "authenticated_update_weekly_actions" on public.weekly_actions
+  for update to authenticated
+  using (public.is_org_member(org_id))
+  with check (public.is_org_member(org_id) and user_id = auth.uid());
+create policy "authenticated_delete_weekly_actions" on public.weekly_actions
+  for delete to authenticated
   using (public.is_org_member(org_id));
 
 -- ============================================================
