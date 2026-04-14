@@ -41,6 +41,7 @@ create table if not exists public.contacts (
   stage text default 'Lead',
   source text,
   priority text default 'Medium',
+  tier integer default 1 check (tier between 1 and 4),
   next_follow_up date,
   next_follow_up_note text,
   notes text,

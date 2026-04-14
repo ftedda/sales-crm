@@ -12,6 +12,13 @@ const STAGE_COLORS = {
   'Closed Lost': 'bg-red-100 text-red-700'
 }
 const PRIORITIES = ['High', 'Medium', 'Low']
+const TIERS = [1, 2, 3, 4]
+const TIER_COLORS = {
+  1: 'bg-emerald-100 text-emerald-700',
+  2: 'bg-blue-100 text-blue-700',
+  3: 'bg-yellow-100 text-yellow-700',
+  4: 'bg-slate-100 text-slate-600',
+}
 
 const ENGAGEMENT_CONFIG = {
   high: { icon: Flame, color: 'text-red-500', bg: 'bg-red-50', label: 'Hot' },
@@ -41,7 +48,7 @@ function getFollowUpStatus(date) {
 
 export default function Pipeline({ data, addContact, updateContact, deleteContact, addQuickNote, addWeeklyAction, updateWeeklyAction, getContactTimeline, getLastTouched }) {
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', company: '', email: '', phone: '', title: '', deal_value: '', stage: 'Lead', source: '', priority: 'Medium', next_follow_up: '', next_follow_up_note: '', notes: '' })
+  const [form, setForm] = useState({ name: '', company: '', email: '', phone: '', title: '', deal_value: '', stage: 'Lead', source: '', priority: 'Medium', tier: 1, next_follow_up: '', next_follow_up_note: '', notes: '' })
   const [stageFilter, setStageFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -66,7 +73,7 @@ export default function Pipeline({ data, addContact, updateContact, deleteContac
     if (submitData.deal_value) submitData.deal_value = Number(submitData.deal_value)
     if (!submitData.next_follow_up) submitData.next_follow_up = null
     await addContact(submitData)
-    setForm({ name: '', company: '', email: '', phone: '', title: '', deal_value: '', stage: 'Lead', source: '', priority: 'Medium', next_follow_up: '', next_follow_up_note: '', notes: '' })
+    setForm({ name: '', company: '', email: '', phone: '', title: '', deal_value: '', stage: 'Lead', source: '', priority: 'Medium', tier: 1, next_follow_up: '', next_follow_up_note: '', notes: '' })
     setShowForm(false)
   }
 
@@ -137,6 +144,8 @@ export default function Pipeline({ data, addContact, updateContact, deleteContac
             return dir * (a[sortConfig.key] || '').localeCompare(b[sortConfig.key] || '', undefined, { sensitivity: 'base' })
           case 'deal_value':
             return dir * ((Number(a.deal_value) || 0) - (Number(b.deal_value) || 0))
+          case 'tier':
+            return dir * ((a.tier || 1) - (b.tier || 1))
           case 'stage':
             return dir * (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage))
           case 'activity': {
@@ -255,6 +264,9 @@ export default function Pipeline({ data, addContact, updateContact, deleteContac
             <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} className="border rounded px-3 py-2 text-sm">
               {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
+            <select value={form.tier} onChange={e => setForm({ ...form, tier: Number(e.target.value) })} className="border rounded px-3 py-2 text-sm">
+              {TIERS.map(t => <option key={t} value={t}>Tier {t}</option>)}
+            </select>
             <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })} className="border rounded px-3 py-2 text-sm">
               {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -295,6 +307,7 @@ export default function Pipeline({ data, addContact, updateContact, deleteContac
                   { key: 'name', label: 'Name', className: '' },
                   { key: 'company', label: 'Company', className: 'hidden sm:table-cell' },
                   { key: 'deal_value', label: 'Deal Value', className: 'hidden md:table-cell' },
+                  { key: 'tier', label: 'Tier', className: 'hidden md:table-cell' },
                   { key: 'stage', label: 'Stage', className: '' },
                   { key: 'activity', label: 'Activity', className: 'hidden lg:table-cell' },
                   { key: 'follow_up', label: 'Follow-up', className: 'hidden lg:table-cell' },
@@ -344,6 +357,11 @@ export default function Pipeline({ data, addContact, updateContact, deleteContac
                       </td>
                       <td className="px-3 py-2 hidden md:table-cell">
                         <span className="text-sm font-medium text-slate-700">{formatCurrency(contact.deal_value)}</span>
+                      </td>
+                      <td className="px-3 py-2 hidden md:table-cell">
+                        <span className={`${TIER_COLORS[contact.tier || 1]} px-2 py-0.5 rounded text-xs font-medium`}>
+                          Tier {contact.tier || 1}
+                        </span>
                       </td>
                       <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                         <select
@@ -398,7 +416,7 @@ export default function Pipeline({ data, addContact, updateContact, deleteContac
                     </tr>
                     {expandedRow === contact.id && (
                       <tr className="bg-slate-50">
-                        <td colSpan={7} className="px-3 py-3">
+                        <td colSpan={8} className="px-3 py-3">
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                             <div>
                               <label className="text-slate-500 block mb-1">Name</label>
@@ -457,6 +475,16 @@ export default function Pipeline({ data, addContact, updateContact, deleteContac
                                 className="w-full border rounded px-2 py-1.5"
                               >
                                 {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Tier</label>
+                              <select
+                                value={editData.tier || 1}
+                                onChange={e => handleEditChange('tier', Number(e.target.value))}
+                                className="w-full border rounded px-2 py-1.5"
+                              >
+                                {TIERS.map(t => <option key={t} value={t}>Tier {t}</option>)}
                               </select>
                             </div>
                             <div>
