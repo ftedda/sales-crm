@@ -32,8 +32,8 @@ export default function Auth({ onAuth }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Series B Command Center</h1>
-          <p className="text-slate-400">Track your fundraise from start to close</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Sales CRM</h1>
+          <p className="text-slate-400">Contact & Deal Management</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-2xl p-8">
@@ -101,7 +101,7 @@ export default function Auth({ onAuth }) {
         </div>
 
         <p className="text-center text-slate-500 text-sm mt-6">
-          Your fundraise data is encrypted and secure.
+          Your data is encrypted and secure.
         </p>
       </div>
     </div>

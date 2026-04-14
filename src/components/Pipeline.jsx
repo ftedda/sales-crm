@@ -1,19 +1,17 @@
 import React, { useState, useMemo } from 'react'
-import { PlusCircle, Trash2, Search, X, ChevronDown, Save, Clock, History, TrendingUp, Flame, Snowflake, Sun, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
-import InvestorTimeline, { getEngagementLevel, formatRelativeTime } from './InvestorTimeline'
+import { PlusCircle, Trash2, Search, X, ChevronDown, Save, Clock, History, TrendingUp, Flame, Snowflake, Sun, ArrowUpDown, ArrowUp, ArrowDown, CalendarClock, AlertTriangle } from 'lucide-react'
+import ContactTimeline, { getEngagementLevel, formatRelativeTime } from './ContactTimeline'
 
-const STAGES = ['Target List', 'Contacted', 'Engaged', 'In Diligence', 'Term Sheet', 'Closing', 'Closed', 'Passed']
+const STAGES = ['Lead', 'Qualified', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']
 const STAGE_COLORS = {
-  'Target List': 'bg-gray-100 text-gray-700',
-  'Contacted': 'bg-blue-100 text-blue-700',
-  'Engaged': 'bg-purple-100 text-purple-700',
-  'In Diligence': 'bg-yellow-100 text-yellow-700',
-  'Term Sheet': 'bg-orange-100 text-orange-700',
-  'Closing': 'bg-green-100 text-green-700',
-  'Closed': 'bg-emerald-200 text-emerald-800',
-  'Passed': 'bg-red-100 text-red-700'
+  'Lead': 'bg-gray-100 text-gray-700',
+  'Qualified': 'bg-blue-100 text-blue-700',
+  'Proposal': 'bg-purple-100 text-purple-700',
+  'Negotiation': 'bg-yellow-100 text-yellow-700',
+  'Closed Won': 'bg-emerald-200 text-emerald-800',
+  'Closed Lost': 'bg-red-100 text-red-700'
 }
-const TIERS = ['1 - Must Have', '2 - Strong Fit', '3 - Opportunistic']
+const PRIORITIES = ['High', 'Medium', 'Low']
 
 const ENGAGEMENT_CONFIG = {
   high: { icon: Flame, color: 'text-red-500', bg: 'bg-red-50', label: 'Hot' },
@@ -24,15 +22,33 @@ const ENGAGEMENT_CONFIG = {
   none: { icon: Clock, color: 'text-slate-300', bg: 'bg-slate-50', label: 'None' }
 }
 
-export default function Pipeline({ data, addInvestor, updateInvestor, deleteInvestor, addQuickNote, addWeeklyAction, updateWeeklyAction, getInvestorTimeline, getLastTouched }) {
+function formatCurrency(value) {
+  if (!value) return ''
+  const num = Number(value)
+  if (isNaN(num)) return ''
+  if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`
+  return `$${num.toLocaleString()}`
+}
+
+function getFollowUpStatus(date) {
+  if (!date) return { label: 'Not set', color: 'text-slate-400', bg: 'bg-slate-50' }
+  const today = new Date().toISOString().split('T')[0]
+  if (date < today) return { label: 'Overdue', color: 'text-red-600', bg: 'bg-red-50' }
+  if (date === today) return { label: 'Today', color: 'text-orange-600', bg: 'bg-orange-50' }
+  return { label: date, color: 'text-green-600', bg: 'bg-green-50' }
+}
+
+export default function Pipeline({ data, addContact, updateContact, deleteContact, addQuickNote, addWeeklyAction, updateWeeklyAction, getContactTimeline, getLastTouched }) {
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ firm: '', contact: '', email: '', tier: '2 - Strong Fit', stage: 'Target List', next_action: '', notes: '' })
+  const [form, setForm] = useState({ name: '', company: '', email: '', phone: '', title: '', deal_value: '', stage: 'Lead', source: '', priority: 'Medium', next_follow_up: '', next_follow_up_note: '', notes: '' })
   const [stageFilter, setStageFilter] = useState('all')
-  const [tierFilter, setTierFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [quickFilter, setQuickFilter] = useState(null) // 'needs_followup'
   const [expandedRow, setExpandedRow] = useState(null)
   const [editData, setEditData] = useState({})
-  const [selectedInvestor, setSelectedInvestor] = useState(null)
+  const [selectedContact, setSelectedContact] = useState(null)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
 
   const handleSort = (key) => {
@@ -45,26 +61,29 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
   const ENGAGEMENT_ORDER = ['high', 'medium', 'warm', 'cooling', 'cold', 'none']
 
   const handleSubmit = async () => {
-    if (!form.firm) return
-    await addInvestor(form)
-    setForm({ firm: '', contact: '', email: '', tier: '2 - Strong Fit', stage: 'Target List', next_action: '', notes: '' })
+    if (!form.name) return
+    const submitData = { ...form }
+    if (submitData.deal_value) submitData.deal_value = Number(submitData.deal_value)
+    if (!submitData.next_follow_up) submitData.next_follow_up = null
+    await addContact(submitData)
+    setForm({ name: '', company: '', email: '', phone: '', title: '', deal_value: '', stage: 'Lead', source: '', priority: 'Medium', next_follow_up: '', next_follow_up_note: '', notes: '' })
     setShowForm(false)
   }
 
   const handleDelete = async (id) => {
-    if (confirm('Delete this investor?')) {
-      await deleteInvestor(id)
+    if (confirm('Delete this contact?')) {
+      await deleteContact(id)
       setExpandedRow(null)
     }
   }
 
-  const handleExpand = (inv) => {
-    if (expandedRow === inv.id) {
+  const handleExpand = (contact) => {
+    if (expandedRow === contact.id) {
       setExpandedRow(null)
       setEditData({})
     } else {
-      setExpandedRow(inv.id)
-      setEditData({ ...inv })
+      setExpandedRow(contact.id)
+      setEditData({ ...contact })
     }
   }
 
@@ -74,47 +93,64 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
 
   const handleSave = async () => {
     if (expandedRow && editData) {
-      await updateInvestor(expandedRow, editData)
+      const updates = { ...editData }
+      if (updates.deal_value) updates.deal_value = Number(updates.deal_value)
+      if (!updates.next_follow_up) updates.next_follow_up = null
+      await updateContact(expandedRow, updates)
       setExpandedRow(null)
       setEditData({})
     }
   }
 
+  const today = new Date().toISOString().split('T')[0]
+
   const filtered = useMemo(() => {
-    let result = data.investors
+    let result = data.contacts || []
     if (stageFilter !== 'all') {
-      result = result.filter(i => i.stage === stageFilter)
+      result = result.filter(c => c.stage === stageFilter)
     }
-    if (tierFilter !== 'all') {
-      result = result.filter(i => i.tier === tierFilter)
+    if (priorityFilter !== 'all') {
+      result = result.filter(c => c.priority === priorityFilter)
+    }
+    if (quickFilter === 'needs_followup') {
+      result = result.filter(c => {
+        const overdue = c.next_follow_up && c.next_follow_up < today
+        const noFollowUp = !c.next_follow_up && c.stage !== 'Closed Won' && c.stage !== 'Closed Lost'
+        return overdue || noFollowUp
+      })
     }
     if (search.trim()) {
       const q = search.toLowerCase()
-      result = result.filter(i =>
-        i.firm?.toLowerCase().includes(q) ||
-        i.contact?.toLowerCase().includes(q) ||
-        i.email?.toLowerCase().includes(q) ||
-        i.notes?.toLowerCase().includes(q)
+      result = result.filter(c =>
+        c.name?.toLowerCase().includes(q) ||
+        c.company?.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
+        c.notes?.toLowerCase().includes(q)
       )
     }
     if (sortConfig.key) {
       const dir = sortConfig.direction === 'asc' ? 1 : -1
       result = [...result].sort((a, b) => {
         switch (sortConfig.key) {
-          case 'firm':
-          case 'contact':
+          case 'name':
+          case 'company':
             return dir * (a[sortConfig.key] || '').localeCompare(b[sortConfig.key] || '', undefined, { sensitivity: 'base' })
-          case 'tier':
-            return dir * (a.tier || '').localeCompare(b.tier || '')
+          case 'deal_value':
+            return dir * ((Number(a.deal_value) || 0) - (Number(b.deal_value) || 0))
           case 'stage':
             return dir * (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage))
           case 'activity': {
-            const timelineA = getInvestorTimeline ? getInvestorTimeline(a.id, a.firm) : []
-            const timelineB = getInvestorTimeline ? getInvestorTimeline(b.id, b.firm) : []
+            const timelineA = getContactTimeline ? getContactTimeline(a.id, a.name) : []
+            const timelineB = getContactTimeline ? getContactTimeline(b.id, b.name) : []
             const levelA = ENGAGEMENT_ORDER.indexOf(getEngagementLevel(timelineA).level)
             const levelB = ENGAGEMENT_ORDER.indexOf(getEngagementLevel(timelineB).level)
             if (levelA !== levelB) return dir * (levelA - levelB)
             return dir * (timelineB.length - timelineA.length)
+          }
+          case 'follow_up': {
+            const aDate = a.next_follow_up || '9999-99-99'
+            const bDate = b.next_follow_up || '9999-99-99'
+            return dir * aDate.localeCompare(bDate)
           }
           default:
             return 0
@@ -122,15 +158,24 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
       })
     }
     return result
-  }, [data.investors, stageFilter, tierFilter, search, sortConfig, getInvestorTimeline])
+  }, [data.contacts, stageFilter, priorityFilter, quickFilter, search, sortConfig, getContactTimeline, today])
 
   const clearFilters = () => {
     setStageFilter('all')
-    setTierFilter('all')
+    setPriorityFilter('all')
     setSearch('')
+    setQuickFilter(null)
   }
 
-  const hasActiveFilters = stageFilter !== 'all' || tierFilter !== 'all' || search.trim()
+  const hasActiveFilters = stageFilter !== 'all' || priorityFilter !== 'all' || search.trim() || quickFilter
+
+  const needsFollowUpCount = useMemo(() => {
+    return (data.contacts || []).filter(c => {
+      const overdue = c.next_follow_up && c.next_follow_up < today
+      const noFollowUp = !c.next_follow_up && c.stage !== 'Closed Won' && c.stage !== 'Closed Lost'
+      return overdue || noFollowUp
+    }).length
+  }, [data.contacts, today])
 
   return (
     <div className="space-y-4">
@@ -140,7 +185,7 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search investors..."
+            placeholder="Search contacts..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-8 py-2 border rounded-lg text-sm"
@@ -152,21 +197,21 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
           )}
         </div>
         <select
-          value={tierFilter}
-          onChange={e => setTierFilter(e.target.value)}
+          value={priorityFilter}
+          onChange={e => setPriorityFilter(e.target.value)}
           className="px-3 py-2 rounded-lg text-sm border bg-white"
         >
-          <option value="all">All Tiers</option>
-          {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+          <option value="all">All Priorities</option>
+          {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <select
           value={stageFilter}
           onChange={e => setStageFilter(e.target.value)}
           className="px-3 py-2 rounded-lg text-sm border bg-white"
         >
-          <option value="all">All Stages ({data.investors.length})</option>
+          <option value="all">All Stages ({(data.contacts || []).length})</option>
           {STAGES.map(s => (
-            <option key={s} value={s}>{s} ({data.investors.filter(i => i.stage === s).length})</option>
+            <option key={s} value={s}>{s} ({(data.contacts || []).filter(c => c.stage === s).length})</option>
           ))}
         </select>
         {hasActiveFilters && (
@@ -176,26 +221,54 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
         )}
       </div>
 
-      {/* Add button */}
-      <button onClick={() => setShowForm(true)} className="w-full flex items-center justify-center space-x-1 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm">
-        <PlusCircle size={16} /><span>Add Investor</span>
-      </button>
+      {/* Quick filters */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowForm(true)} className="flex items-center space-x-1 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm">
+          <PlusCircle size={16} /><span>Add Contact</span>
+        </button>
+        {needsFollowUpCount > 0 && (
+          <button
+            onClick={() => setQuickFilter(quickFilter === 'needs_followup' ? null : 'needs_followup')}
+            className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm border transition-colors ${
+              quickFilter === 'needs_followup'
+                ? 'bg-red-50 border-red-200 text-red-700'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <AlertTriangle size={14} />
+            <span>Needs Follow-up ({needsFollowUpCount})</span>
+          </button>
+        )}
+      </div>
 
       {/* Add form */}
       {showForm && (
         <div className="bg-white rounded-lg p-4 shadow-sm border">
-          <h3 className="font-semibold text-sm mb-3">Add New Investor</h3>
+          <h3 className="font-semibold text-sm mb-3">Add New Contact</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            <input placeholder="Firm Name *" value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} className="border rounded px-3 py-2 text-sm col-span-2 md:col-span-1" />
-            <input placeholder="Contact Name" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} className="border rounded px-3 py-2 text-sm" />
+            <input placeholder="Name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="border rounded px-3 py-2 text-sm col-span-2 md:col-span-1" />
+            <input placeholder="Company" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} className="border rounded px-3 py-2 text-sm" />
+            <input placeholder="Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="border rounded px-3 py-2 text-sm" />
             <input placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="border rounded px-3 py-2 text-sm" />
-            <select value={form.tier} onChange={e => setForm({ ...form, tier: e.target.value })} className="border rounded px-3 py-2 text-sm">
-              {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+            <input placeholder="Phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="border rounded px-3 py-2 text-sm" />
+            <input placeholder="Deal Value" type="number" value={form.deal_value} onChange={e => setForm({ ...form, deal_value: e.target.value })} className="border rounded px-3 py-2 text-sm" />
+            <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} className="border rounded px-3 py-2 text-sm">
+              {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })} className="border rounded px-3 py-2 text-sm">
               {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <input placeholder="Next Action" value={form.next_action} onChange={e => setForm({ ...form, next_action: e.target.value })} className="border rounded px-3 py-2 text-sm" />
+            <input placeholder="Source" value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} className="border rounded px-3 py-2 text-sm" />
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <label className="text-xs text-slate-500">Follow-up Date</label>
+              <input type="date" value={form.next_follow_up} onChange={e => setForm({ ...form, next_follow_up: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Follow-up Note</label>
+              <input placeholder="What to follow up on" value={form.next_follow_up_note} onChange={e => setForm({ ...form, next_follow_up_note: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" />
+            </div>
           </div>
           <textarea placeholder="Notes" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="w-full border rounded px-3 py-2 text-sm mt-2" rows={2} />
           <div className="flex space-x-2 mt-3">
@@ -208,7 +281,7 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
       {/* Results count */}
       {hasActiveFilters && (
         <p className="text-xs text-slate-500">
-          Showing {filtered.length} of {data.investors.length} investors
+          Showing {filtered.length} of {(data.contacts || []).length} contacts
         </p>
       )}
 
@@ -219,11 +292,12 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
             <thead className="bg-slate-50 border-b">
               <tr>
                 {[
-                  { key: 'firm', label: 'Firm', className: '' },
-                  { key: 'contact', label: 'Contact', className: 'hidden sm:table-cell' },
-                  { key: 'tier', label: 'Tier', className: 'hidden md:table-cell' },
+                  { key: 'name', label: 'Name', className: '' },
+                  { key: 'company', label: 'Company', className: 'hidden sm:table-cell' },
+                  { key: 'deal_value', label: 'Deal Value', className: 'hidden md:table-cell' },
                   { key: 'stage', label: 'Stage', className: '' },
                   { key: 'activity', label: 'Activity', className: 'hidden lg:table-cell' },
+                  { key: 'follow_up', label: 'Follow-up', className: 'hidden lg:table-cell' },
                 ].map(col => {
                   const SortIcon = sortConfig.key === col.key
                     ? (sortConfig.direction === 'asc' ? ArrowUp : ArrowDown)
@@ -245,42 +319,43 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map(inv => {
-                const lastTouched = getLastTouched ? getLastTouched(inv.id, inv.firm) : null
-                const timeline = getInvestorTimeline ? getInvestorTimeline(inv.id, inv.firm) : []
+              {filtered.map(contact => {
+                const lastTouched = getLastTouched ? getLastTouched(contact.id, contact.name) : null
+                const timeline = getContactTimeline ? getContactTimeline(contact.id, contact.name) : []
                 const engagement = getEngagementLevel(timeline)
                 const engagementConfig = ENGAGEMENT_CONFIG[engagement.level]
                 const EngagementIcon = engagementConfig.icon
+                const followUp = getFollowUpStatus(contact.next_follow_up)
 
                 return (
-                  <React.Fragment key={inv.id}>
+                  <React.Fragment key={contact.id}>
                     <tr
                       className="hover:bg-slate-50 cursor-pointer"
-                      onClick={() => handleExpand(inv)}
+                      onClick={() => handleExpand(contact)}
                     >
                       <td className="px-3 py-2">
-                        <div className="font-medium text-slate-800">{inv.firm}</div>
-                        <div className="text-xs text-slate-400 sm:hidden">{inv.contact}</div>
+                        <div className="font-medium text-slate-800">{contact.name}</div>
+                        {contact.title && <div className="text-xs text-slate-400">{contact.title}</div>}
+                        <div className="text-xs text-slate-400 sm:hidden">{contact.company}</div>
                       </td>
                       <td className="px-3 py-2 text-slate-600 hidden sm:table-cell">
-                        <div>{inv.contact}</div>
-                        <div className="text-xs text-slate-400">{inv.email}</div>
+                        <div>{contact.company}</div>
+                        <div className="text-xs text-slate-400">{contact.email}</div>
                       </td>
                       <td className="px-3 py-2 hidden md:table-cell">
-                        <span className="text-xs text-slate-500">T{inv.tier?.charAt(0)}</span>
+                        <span className="text-sm font-medium text-slate-700">{formatCurrency(contact.deal_value)}</span>
                       </td>
                       <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                         <select
-                          value={inv.stage}
-                          onChange={e => updateInvestor(inv.id, { stage: e.target.value })}
-                          className={`${STAGE_COLORS[inv.stage]} px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer`}
+                          value={contact.stage}
+                          onChange={e => updateContact(contact.id, { stage: e.target.value })}
+                          className={`${STAGE_COLORS[contact.stage]} px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer`}
                         >
                           {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
                       <td className="px-3 py-2 hidden lg:table-cell">
                         <div className="flex items-center gap-2">
-                          {/* Engagement indicator */}
                           <div
                             className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${engagementConfig.bg}`}
                             title={`${engagementConfig.label}${lastTouched ? ` - Last: ${formatRelativeTime(lastTouched)}` : ''}`}
@@ -290,7 +365,6 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
                               {engagementConfig.label}
                             </span>
                           </div>
-                          {/* Activity count */}
                           {timeline.length > 0 && (
                             <span className="text-xs text-slate-400">
                               {timeline.length}
@@ -298,37 +372,55 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
                           )}
                         </div>
                       </td>
+                      <td className="px-3 py-2 hidden lg:table-cell">
+                        <div className={`flex items-center gap-1 text-xs font-medium ${followUp.color}`}>
+                          <CalendarClock size={12} />
+                          <span>{followUp.label}</span>
+                        </div>
+                        {contact.next_follow_up_note && (
+                          <div className="text-xs text-slate-400 truncate max-w-[120px]" title={contact.next_follow_up_note}>
+                            {contact.next_follow_up_note}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
-                          {/* Timeline button */}
                           <button
-                            onClick={() => setSelectedInvestor(inv)}
+                            onClick={() => setSelectedContact(contact)}
                             className="p-1.5 rounded hover:bg-slate-100 transition-colors group"
                             title="View timeline"
                           >
                             <History size={14} className="text-slate-400 group-hover:text-slate-600" />
                           </button>
-                          <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedRow === inv.id ? 'rotate-180' : ''}`} />
+                          <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedRow === contact.id ? 'rotate-180' : ''}`} />
                         </div>
                       </td>
                     </tr>
-                    {expandedRow === inv.id && (
+                    {expandedRow === contact.id && (
                       <tr className="bg-slate-50">
-                        <td colSpan={6} className="px-3 py-3">
+                        <td colSpan={7} className="px-3 py-3">
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                             <div>
-                              <label className="text-slate-500 block mb-1">Firm</label>
+                              <label className="text-slate-500 block mb-1">Name</label>
                               <input
-                                value={editData.firm || ''}
-                                onChange={e => handleEditChange('firm', e.target.value)}
+                                value={editData.name || ''}
+                                onChange={e => handleEditChange('name', e.target.value)}
                                 className="w-full border rounded px-2 py-1.5"
                               />
                             </div>
                             <div>
-                              <label className="text-slate-500 block mb-1">Contact</label>
+                              <label className="text-slate-500 block mb-1">Company</label>
                               <input
-                                value={editData.contact || ''}
-                                onChange={e => handleEditChange('contact', e.target.value)}
+                                value={editData.company || ''}
+                                onChange={e => handleEditChange('company', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Title</label>
+                              <input
+                                value={editData.title || ''}
+                                onChange={e => handleEditChange('title', e.target.value)}
                                 className="w-full border rounded px-2 py-1.5"
                               />
                             </div>
@@ -349,13 +441,22 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
                               />
                             </div>
                             <div>
-                              <label className="text-slate-500 block mb-1">Tier</label>
+                              <label className="text-slate-500 block mb-1">Deal Value</label>
+                              <input
+                                type="number"
+                                value={editData.deal_value || ''}
+                                onChange={e => handleEditChange('deal_value', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-500 block mb-1">Priority</label>
                               <select
-                                value={editData.tier || ''}
-                                onChange={e => handleEditChange('tier', e.target.value)}
+                                value={editData.priority || 'Medium'}
+                                onChange={e => handleEditChange('priority', e.target.value)}
                                 className="w-full border rounded px-2 py-1.5"
                               >
-                                {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+                                {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
                               </select>
                             </div>
                             <div>
@@ -369,27 +470,27 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
                               </select>
                             </div>
                             <div>
-                              <label className="text-slate-500 block mb-1">Intro Source</label>
+                              <label className="text-slate-500 block mb-1">Source</label>
                               <input
-                                value={editData.intro_source || ''}
-                                onChange={e => handleEditChange('intro_source', e.target.value)}
+                                value={editData.source || ''}
+                                onChange={e => handleEditChange('source', e.target.value)}
                                 className="w-full border rounded px-2 py-1.5"
                               />
                             </div>
                             <div>
-                              <label className="text-slate-500 block mb-1">Next Action</label>
-                              <input
-                                value={editData.next_action || ''}
-                                onChange={e => handleEditChange('next_action', e.target.value)}
-                                className="w-full border rounded px-2 py-1.5"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-slate-500 block mb-1">Next Action Date</label>
+                              <label className="text-slate-500 block mb-1">Follow-up Date</label>
                               <input
                                 type="date"
-                                value={editData.next_action_date || ''}
-                                onChange={e => handleEditChange('next_action_date', e.target.value)}
+                                value={editData.next_follow_up || ''}
+                                onChange={e => handleEditChange('next_follow_up', e.target.value)}
+                                className="w-full border rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="text-slate-500 block mb-1">Follow-up Note</label>
+                              <input
+                                value={editData.next_follow_up_note || ''}
+                                onChange={e => handleEditChange('next_follow_up_note', e.target.value)}
                                 className="w-full border rounded px-2 py-1.5"
                               />
                             </div>
@@ -406,13 +507,13 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
                           <div className="flex items-center justify-between mt-3">
                             <div className="flex items-center gap-3">
                               <button
-                                onClick={() => handleDelete(inv.id)}
+                                onClick={() => handleDelete(contact.id)}
                                 className="flex items-center text-red-500 hover:text-red-700 text-xs"
                               >
                                 <Trash2 size={12} className="mr-1" /> Delete
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); setSelectedInvestor(inv) }}
+                                onClick={(e) => { e.stopPropagation(); setSelectedContact(contact) }}
                                 className="flex items-center text-slate-500 hover:text-slate-700 text-xs"
                               >
                                 <History size={12} className="mr-1" /> Timeline
@@ -443,31 +544,31 @@ export default function Pipeline({ data, addInvestor, updateInvestor, deleteInve
           </table>
         </div>
         {filtered.length === 0 && (
-          <p className="text-center py-8 text-slate-400 text-sm">No investors in this view</p>
+          <p className="text-center py-8 text-slate-400 text-sm">No contacts in this view</p>
         )}
       </div>
 
       {/* Timeline Modal */}
-      {selectedInvestor && (
-        <InvestorTimeline
-          investor={selectedInvestor}
-          timeline={getInvestorTimeline ? getInvestorTimeline(selectedInvestor.id, selectedInvestor.firm) : []}
-          lastTouched={getLastTouched ? getLastTouched(selectedInvestor.id, selectedInvestor.firm) : null}
-          onClose={() => setSelectedInvestor(null)}
+      {selectedContact && (
+        <ContactTimeline
+          contact={selectedContact}
+          timeline={getContactTimeline ? getContactTimeline(selectedContact.id, selectedContact.name) : []}
+          lastTouched={getLastTouched ? getLastTouched(selectedContact.id, selectedContact.name) : null}
+          onClose={() => setSelectedContact(null)}
           onAddNote={async (note) => {
             if (addQuickNote) {
-              await addQuickNote(selectedInvestor.id, selectedInvestor.firm, note)
+              await addQuickNote(selectedContact.id, selectedContact.name, note)
             }
           }}
           onToggleAction={updateWeeklyAction}
           onAddAction={addWeeklyAction ? async (actionText) => {
             const newAction = {
-              action: `[${selectedInvestor.firm}] ${actionText}`,
+              action: `[${selectedContact.name}] ${actionText}`,
               owner: '',
               due: '',
               status: 'Not Started',
-              investor_id: selectedInvestor.id,
-              investor_firm: selectedInvestor.firm,
+              contact_id: selectedContact.id,
+              contact_name: selectedContact.name,
             }
             await addWeeklyAction(newAction)
           } : null}

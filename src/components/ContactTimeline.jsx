@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import {
   X,
-  Mail,
-  Calendar,
   ArrowRightLeft,
   StickyNote,
   PlusCircle,
@@ -12,22 +10,17 @@ import {
   Check,
   CheckCircle,
   Filter,
-  Users,
-  MailOpen,
-  MousePointerClick,
   TrendingUp,
-  AlertCircle,
-  ListTodo
+  ListTodo,
+  CalendarClock
 } from 'lucide-react'
 
 const ACTIVITY_TYPES = {
-  email: { label: 'Email', icon: Mail, color: 'text-blue-500 bg-blue-50', borderColor: 'border-blue-200' },
-  meeting: { label: 'Meeting', icon: Calendar, color: 'text-purple-500 bg-purple-50', borderColor: 'border-purple-200' },
   stage_change: { label: 'Stage Change', icon: ArrowRightLeft, color: 'text-orange-500 bg-orange-50', borderColor: 'border-orange-200' },
   note: { label: 'Note', icon: StickyNote, color: 'text-green-500 bg-green-50', borderColor: 'border-green-200' },
   action: { label: 'Action', icon: ListTodo, color: 'text-indigo-500 bg-indigo-50', borderColor: 'border-indigo-200' },
   created: { label: 'Created', icon: PlusCircle, color: 'text-slate-500 bg-slate-50', borderColor: 'border-slate-200' },
-  reference: { label: 'Reference', icon: Users, color: 'text-pink-500 bg-pink-50', borderColor: 'border-pink-200' }
+  follow_up: { label: 'Follow-up', icon: CalendarClock, color: 'text-blue-500 bg-blue-50', borderColor: 'border-blue-200' }
 }
 
 function formatRelativeTime(timestamp) {
@@ -81,8 +74,8 @@ function getEngagementLevel(timeline) {
   return { level: 'cold', label: 'Cold', color: 'text-slate-400' }
 }
 
-export default function InvestorTimeline({
-  investor,
+export default function ContactTimeline({
+  contact,
   timeline,
   onClose,
   onAddNote,
@@ -114,7 +107,6 @@ export default function InvestorTimeline({
     }
   }
 
-  // Calculate activity stats
   const activityStats = useMemo(() => {
     const stats = {
       total: timeline.length,
@@ -128,7 +120,6 @@ export default function InvestorTimeline({
     return stats
   }, [timeline])
 
-  // Filter timeline based on active filter
   const filteredTimeline = useMemo(() => {
     if (activeFilter === 'all') return timeline
     return timeline.filter(item => item.type === activeFilter)
@@ -138,10 +129,6 @@ export default function InvestorTimeline({
 
   const getActivityLabel = (item) => {
     switch (item.type) {
-      case 'email':
-        return item.replied ? 'Email replied' : 'Email sent'
-      case 'meeting':
-        return item.meetingType || 'Meeting'
       case 'stage_change':
         return 'Stage changed'
       case 'note':
@@ -149,9 +136,9 @@ export default function InvestorTimeline({
       case 'action':
         return 'Action'
       case 'created':
-        return 'Added to pipeline'
-      case 'reference':
-        return 'Reference call'
+        return 'Added to CRM'
+      case 'follow_up':
+        return 'Follow-up'
       default:
         return item.type
     }
@@ -172,9 +159,9 @@ export default function InvestorTimeline({
         <div className="p-4 border-b">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="font-semibold text-lg text-slate-800">{investor.firm}</h2>
-              {investor.contact && (
-                <p className="text-xs text-slate-500">{investor.contact}</p>
+              <h2 className="font-semibold text-lg text-slate-800">{contact.name}</h2>
+              {contact.company && (
+                <p className="text-xs text-slate-500">{contact.company}</p>
               )}
             </div>
             <button
@@ -239,7 +226,7 @@ export default function InvestorTimeline({
               <textarea
                 value={newNote}
                 onChange={(e) => setNewNote(e.target.value)}
-                placeholder="Add a quick note... (e.g., 'Had great intro call, interested in our API')"
+                placeholder="Add a quick note..."
                 className="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-slate-300"
                 rows={2}
                 autoFocus
@@ -266,7 +253,7 @@ export default function InvestorTimeline({
               <input
                 value={newAction}
                 onChange={(e) => setNewAction(e.target.value)}
-                placeholder="Action item... (e.g., 'Send follow-up deck')"
+                placeholder="Action item... (e.g., 'Send follow-up proposal')"
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                 autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAddAction() }}
@@ -339,7 +326,7 @@ export default function InvestorTimeline({
               <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-200" />
 
               <div className="space-y-4">
-                {filteredTimeline.map((item, index) => {
+                {filteredTimeline.map((item) => {
                   const config = ACTIVITY_TYPES[item.type] || ACTIVITY_TYPES.note
                   const Icon = config.icon
 
@@ -386,58 +373,11 @@ export default function InvestorTimeline({
                           </p>
                         )}
 
-                        {/* Extra info for specific types */}
-                        {item.type === 'email' && (
-                          <div className="flex items-center gap-3 mt-2 text-xs">
-                            {item.replied && (
-                              <div className="flex items-center space-x-1 text-green-600">
-                                <CheckCircle size={12} />
-                                <span>Replied</span>
-                              </div>
-                            )}
-                            {item.opened && (
-                              <div className="flex items-center space-x-1 text-blue-500">
-                                <MailOpen size={12} />
-                                <span>Opened</span>
-                              </div>
-                            )}
-                            {item.clicked && (
-                              <div className="flex items-center space-x-1 text-purple-500">
-                                <MousePointerClick size={12} />
-                                <span>Clicked</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {item.type === 'meeting' && item.followUp && (
-                          <div className="mt-2 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded inline-block">
-                            Follow-up: {item.followUp}
-                          </div>
-                        )}
-
-                        {item.type === 'meeting' && item.attendees && (
-                          <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">
-                            <Users size={12} />
-                            <span>{item.attendees}</span>
-                          </div>
-                        )}
-
                         {item.type === 'stage_change' && item.oldValue && item.newValue && (
                           <div className="mt-2 flex items-center gap-2 text-xs">
                             <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-500">{item.oldValue}</span>
                             <ArrowRightLeft size={12} className="text-slate-400" />
                             <span className="px-2 py-0.5 bg-orange-100 rounded text-orange-700 font-medium">{item.newValue}</span>
-                          </div>
-                        )}
-
-                        {item.type === 'reference' && item.status && (
-                          <div className={`mt-2 text-xs px-2 py-1 rounded inline-block ${
-                            item.status === 'completed' ? 'bg-green-50 text-green-700' :
-                            item.status === 'scheduled' ? 'bg-blue-50 text-blue-700' :
-                            'bg-yellow-50 text-yellow-700'
-                          }`}>
-                            {item.status}
                           </div>
                         )}
 
@@ -477,5 +417,4 @@ export default function InvestorTimeline({
   )
 }
 
-// Export utility function for use elsewhere
 export { getEngagementLevel, formatRelativeTime }

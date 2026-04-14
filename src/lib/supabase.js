@@ -45,7 +45,7 @@ export const onAuthStateChange = (callback) => {
 
 export const getUserOrg = async (userId) => {
   if (!supabase) return null
-  const { data, error } = await supabase.rpc('get_user_org', { p_user_id: userId })
+  const { data, error } = await supabase.rpc('ensure_user_org', { p_user_id: userId })
   if (error) {
     console.error('Failed to resolve user org:', error)
     return null

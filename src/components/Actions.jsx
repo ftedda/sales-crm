@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
-import { PlusCircle, Trash2, Check, Edit3, Search, X, Filter } from 'lucide-react'
+import { PlusCircle, Trash2, Check, Edit3, Search, X } from 'lucide-react'
 
-const STAGES = ['Target List', 'Contacted', 'Engaged', 'In Diligence', 'Term Sheet', 'Closing', 'Closed', 'Passed']
+const STAGES = ['Lead', 'Qualified', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']
 
 const TAG_COLORS = [
   'bg-blue-100 text-blue-700',
@@ -24,11 +24,11 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('active')
   const [tagFilter, setTagFilter] = useState('all')
-  const [investorFilter, setInvestorFilter] = useState('all')
+  const [contactFilter, setContactFilter] = useState('all')
   const [stageFilter, setStageFilter] = useState('all')
   const [editingAction, setEditingAction] = useState(null)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ action: '', owner: '', due: '', investor_id: '', tags: '' })
+  const [form, setForm] = useState({ action: '', owner: '', due: '', contact_id: '', tags: '' })
 
   const allTags = useMemo(() => {
     const tags = new Set()
@@ -38,24 +38,26 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
     return [...tags].sort()
   }, [data.weeklyActions])
 
-  const investorMap = useMemo(() => {
+  const contactMap = useMemo(() => {
     const map = new Map()
-    ;(data.investors || []).forEach(inv => map.set(inv.id, inv))
+    ;(data.contacts || []).forEach(c => map.set(c.id, c))
     return map
-  }, [data.investors])
+  }, [data.contacts])
 
-  const firmToInvestor = useMemo(() => {
+  const nameToContact = useMemo(() => {
     const map = new Map()
-    ;(data.investors || []).forEach(inv => { if (inv.firm) map.set(inv.firm, inv) })
+    ;(data.contacts || []).forEach(c => { if (c.name) map.set(c.name, c) })
     return map
-  }, [data.investors])
+  }, [data.contacts])
 
-  // Resolve investor info: use FK if set, otherwise parse [FirmName] prefix
-  const getActionInvestor = (action) => {
-    if (action.investor_id) return investorMap.get(action.investor_id) || null
-    if (action.investor_firm) return firmToInvestor.get(action.investor_firm) || null
+  // Resolve contact info: use FK if set, otherwise parse [Name] prefix
+  const getActionContact = (action) => {
+    if (action.contact_id) return contactMap.get(action.contact_id) || null
+    if (action.contact_name) return nameToContact.get(action.contact_name) || null
+    // Legacy: try investor_id / investor_firm for migrated data
+    if (action.investor_id) return contactMap.get(action.investor_id) || null
     const match = action.action?.match(/^\[([^\]]+)\]\s/)
-    if (match) return firmToInvestor.get(match[1]) || null
+    if (match) return nameToContact.get(match[1]) || null
     return null
   }
 
@@ -63,55 +65,50 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
     return action.action?.replace(/^\[[^\]]+\]\s*/, '') || action.action
   }
 
-  const uniqueFirms = useMemo(() => {
-    const firms = new Set()
-    ;(data.investors || []).forEach(inv => { if (inv.firm) firms.add(inv.firm) })
-    return [...firms].sort()
-  }, [data.investors])
+  const uniqueNames = useMemo(() => {
+    const names = new Set()
+    ;(data.contacts || []).forEach(c => { if (c.name) names.add(c.name) })
+    return [...names].sort()
+  }, [data.contacts])
 
   const filteredActions = useMemo(() => {
     let result = data.weeklyActions || []
 
-    // Status filter
     if (statusFilter === 'active') {
       result = result.filter(a => a.status !== 'Complete')
     } else if (statusFilter === 'completed') {
       result = result.filter(a => a.status === 'Complete')
     }
 
-    // Tag filter
     if (tagFilter !== 'all') {
       result = result.filter(a => a.tags && a.tags.split(',').map(t => t.trim()).includes(tagFilter))
     }
 
-    // Investor filter
-    if (investorFilter !== 'all') {
+    if (contactFilter !== 'all') {
       result = result.filter(a => {
-        const inv = getActionInvestor(a)
-        return inv && inv.firm === investorFilter
+        const c = getActionContact(a)
+        return c && c.name === contactFilter
       })
     }
 
-    // Stage filter
     if (stageFilter !== 'all') {
       result = result.filter(a => {
-        const inv = getActionInvestor(a)
-        return inv && inv.stage === stageFilter
+        const c = getActionContact(a)
+        return c && c.stage === stageFilter
       })
     }
 
-    // Search
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter(a =>
         a.action?.toLowerCase().includes(q) ||
         a.owner?.toLowerCase().includes(q) ||
+        a.contact_name?.toLowerCase().includes(q) ||
         a.investor_firm?.toLowerCase().includes(q) ||
         a.tags?.toLowerCase().includes(q)
       )
     }
 
-    // Sort: incomplete first, then by due date asc (nulls last), then created_at desc
     return [...result].sort((a, b) => {
       const aComplete = a.status === 'Complete' ? 1 : 0
       const bComplete = b.status === 'Complete' ? 1 : 0
@@ -121,11 +118,11 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
       if (b.due) return 1
       return new Date(b.created_at) - new Date(a.created_at)
     })
-  }, [data.weeklyActions, statusFilter, tagFilter, investorFilter, stageFilter, search, investorMap])
+  }, [data.weeklyActions, statusFilter, tagFilter, contactFilter, stageFilter, search, contactMap])
 
   const activeFilterCount = [
     tagFilter !== 'all',
-    investorFilter !== 'all',
+    contactFilter !== 'all',
     stageFilter !== 'all',
     search.trim(),
   ].filter(Boolean).length
@@ -133,24 +130,24 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
   const clearFilters = () => {
     setSearch('')
     setTagFilter('all')
-    setInvestorFilter('all')
+    setContactFilter('all')
     setStageFilter('all')
   }
 
   const handleAddAction = async () => {
     if (!form.action.trim()) return
-    const investor = form.investor_id ? investorMap.get(Number(form.investor_id)) : null
+    const contact = form.contact_id ? contactMap.get(Number(form.contact_id)) : null
     const newAction = {
       action: form.action,
       owner: form.owner,
       due: form.due,
       status: 'Not Started',
-      investor_id: investor ? investor.id : null,
-      investor_firm: investor ? investor.firm : null,
+      contact_id: contact ? contact.id : null,
+      contact_name: contact ? contact.name : null,
       tags: form.tags || null,
     }
     await addWeeklyAction(newAction)
-    setForm({ action: '', owner: '', due: '', investor_id: '', tags: '' })
+    setForm({ action: '', owner: '', due: '', contact_id: '', tags: '' })
     setShowForm(false)
   }
 
@@ -189,13 +186,13 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
             />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <select
-                value={form.investor_id}
-                onChange={e => setForm({ ...form, investor_id: e.target.value })}
+                value={form.contact_id}
+                onChange={e => setForm({ ...form, contact_id: e.target.value })}
                 className="border rounded px-3 py-2 text-sm bg-white"
               >
-                <option value="">No investor</option>
-                {(data.investors || []).map(inv => (
-                  <option key={inv.id} value={inv.id}>{inv.firm}</option>
+                <option value="">No contact</option>
+                {(data.contacts || []).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}{c.company ? ` (${c.company})` : ''}</option>
                 ))}
               </select>
               <input
@@ -252,12 +249,12 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
             {allTags.map(t => <option key={t} value={t}>#{t}</option>)}
           </select>
           <select
-            value={investorFilter}
-            onChange={e => setInvestorFilter(e.target.value)}
+            value={contactFilter}
+            onChange={e => setContactFilter(e.target.value)}
             className="px-3 py-2 rounded-lg text-sm border bg-white"
           >
-            <option value="all">All Investors</option>
-            {uniqueFirms.map(f => <option key={f} value={f}>{f}</option>)}
+            <option value="all">All Contacts</option>
+            {uniqueNames.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
           <select
             value={stageFilter}
@@ -301,7 +298,7 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
       <div className="space-y-2">
         {filteredActions.map(action => {
           const actionTags = action.tags ? action.tags.split(',').map(t => t.trim()).filter(Boolean) : []
-          const resolvedInvestor = getActionInvestor(action)
+          const resolvedContact = getActionContact(action)
           const displayText = getActionDisplayText(action)
           const overdue = isOverdue(action)
 
@@ -329,19 +326,19 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
                     />
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <select
-                        value={action.investor_id || resolvedInvestor?.id || ''}
+                        value={action.contact_id || resolvedContact?.id || ''}
                         onChange={e => {
-                          const inv = e.target.value ? investorMap.get(Number(e.target.value)) : null
+                          const c = e.target.value ? contactMap.get(Number(e.target.value)) : null
                           updateWeeklyAction(action.id, {
-                            investor_id: inv ? inv.id : null,
-                            investor_firm: inv ? inv.firm : null,
+                            contact_id: c ? c.id : null,
+                            contact_name: c ? c.name : null,
                           })
                         }}
                         className="border rounded px-2 py-1 text-sm bg-white"
                       >
-                        <option value="">No investor</option>
-                        {(data.investors || []).map(inv => (
-                          <option key={inv.id} value={inv.id}>{inv.firm}</option>
+                        <option value="">No contact</option>
+                        {(data.contacts || []).map(c => (
+                          <option key={c.id} value={c.id}>{c.name}{c.company ? ` (${c.company})` : ''}</option>
                         ))}
                       </select>
                       <input
@@ -383,14 +380,14 @@ export default function Actions({ data, addWeeklyAction, updateWeeklyAction, del
                       </div>
                     </div>
 
-                    {/* Meta row: tags, investor, owner, due */}
+                    {/* Meta row: tags, contact, owner, due */}
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      {resolvedInvestor && (
+                      {resolvedContact && (
                         <button
-                          onClick={() => setInvestorFilter(resolvedInvestor.firm)}
+                          onClick={() => setContactFilter(resolvedContact.name)}
                           className="px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200"
                         >
-                          {resolvedInvestor.firm}
+                          {resolvedContact.name}
                         </button>
                       )}
                       {actionTags.map(tag => (

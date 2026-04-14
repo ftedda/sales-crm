@@ -1,215 +1,91 @@
-import React, { useState } from 'react'
-import { ArrowRight, AlertCircle, Building2, Users, Target, DollarSign, Download, FileText, X, Copy, CheckCircle, ChevronRight } from 'lucide-react'
+import React from 'react'
+import { Users, DollarSign, Download, ChevronRight, TrendingUp, AlertTriangle, CalendarClock, Trophy } from 'lucide-react'
 
-const STAGES = ['Target List', 'Contacted', 'Engaged', 'In Diligence', 'Term Sheet', 'Closing', 'Closed', 'Passed']
+const STAGES = ['Lead', 'Qualified', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']
 const STAGE_COLORS = {
-  'Target List': 'bg-gray-100',
-  'Contacted': 'bg-blue-100',
-  'Engaged': 'bg-purple-100',
-  'In Diligence': 'bg-yellow-100',
-  'Term Sheet': 'bg-orange-100',
-  'Closing': 'bg-green-100',
-  'Closed': 'bg-emerald-200',
-  'Passed': 'bg-red-100'
+  'Lead': 'bg-gray-200',
+  'Qualified': 'bg-blue-200',
+  'Proposal': 'bg-purple-200',
+  'Negotiation': 'bg-yellow-200',
+  'Closed Won': 'bg-emerald-300',
+  'Closed Lost': 'bg-red-200'
 }
 
-export default function Dashboard({ data, exportToCSV, onNavigateToActions }) {
-  const [showReportModal, setShowReportModal] = useState(false)
-  const [copied, setCopied] = useState(false)
+function formatCurrency(value) {
+  if (!value) return '$0'
+  const num = Number(value)
+  if (isNaN(num)) return '$0'
+  if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`
+  return `$${num.toLocaleString()}`
+}
 
-  const getStageCount = (stage) => data.investors.filter(i => i.stage === stage).length
-  const getActiveCount = () => data.investors.filter(i => !['Passed', 'Target List', 'Closed'].includes(i.stage)).length
+export default function Dashboard({ data, exportToCSV, onNavigateToActions, onNavigateToPipeline }) {
+  const contacts = data.contacts || []
+  const actions = data.weeklyActions || []
+  const today = new Date().toISOString().split('T')[0]
+
+  const activeStages = ['Lead', 'Qualified', 'Proposal', 'Negotiation']
+  const activeDeals = contacts.filter(c => activeStages.includes(c.stage))
+  const totalPipelineValue = activeDeals.reduce((sum, c) => sum + (Number(c.deal_value) || 0), 0)
+  const closedWonValue = contacts.filter(c => c.stage === 'Closed Won').reduce((sum, c) => sum + (Number(c.deal_value) || 0), 0)
 
   const metrics = [
-    { label: 'Total Investors', value: data.investors.length, icon: Building2, color: 'bg-slate-100 border-slate-200' },
-    { label: 'Active', value: getActiveCount(), icon: Users, color: 'bg-blue-50 border-blue-200' },
-    { label: 'In Diligence', value: getStageCount('In Diligence'), icon: Target, color: 'bg-yellow-50 border-yellow-200' },
-    { label: 'Term Sheets', value: getStageCount('Term Sheet') + data.termSheets.length, icon: DollarSign, color: 'bg-green-50 border-green-200' },
+    { label: 'Total Contacts', value: contacts.length, icon: Users, color: 'bg-slate-100 border-slate-200' },
+    { label: 'Active Deals', value: activeDeals.length, icon: TrendingUp, color: 'bg-blue-50 border-blue-200' },
+    { label: 'Pipeline Value', value: formatCurrency(totalPipelineValue), icon: DollarSign, color: 'bg-purple-50 border-purple-200' },
+    { label: 'Closed Won', value: formatCurrency(closedWonValue), icon: Trophy, color: 'bg-green-50 border-green-200' },
   ]
 
-  const timeline = [
-    { phase: 'Prep', period: 'Jan-Feb', status: 'current' },
-    { phase: 'Roadshow', period: 'Mar-Apr', status: 'upcoming' },
-    { phase: 'Term Sheets', period: 'May', status: 'upcoming' },
-    { phase: 'Close', period: 'Jun-Jul', status: 'upcoming' },
-  ]
+  // Pipeline value by stage
+  const pipelineByStage = STAGES.filter(s => s !== 'Closed Lost').map(stage => {
+    const stageContacts = contacts.filter(c => c.stage === stage)
+    const stageValue = stageContacts.reduce((sum, c) => sum + (Number(c.deal_value) || 0), 0)
+    return { stage, count: stageContacts.length, value: stageValue }
+  })
+  const maxStageValue = Math.max(...pipelineByStage.map(s => s.value), 1)
 
-  // Weekly Report Generator
-  const generateReport = () => {
-    const today = new Date()
-    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+  // Needs attention: overdue follow-ups or no activity in 14+ days
+  const needsAttention = contacts.filter(c => {
+    if (c.stage === 'Closed Won' || c.stage === 'Closed Lost') return false
+    const overdue = c.next_follow_up && c.next_follow_up < today
+    const noFollowUp = !c.next_follow_up
+    return overdue || noFollowUp
+  }).slice(0, 5)
 
-    // Key metrics
-    const totalInvestors = data.investors.length
-    const activeInvestors = getActiveCount()
-    const inDiligence = getStageCount('In Diligence')
-    const termSheetCount = getStageCount('Term Sheet') + data.termSheets.length
+  // Upcoming follow-ups (next 7 days)
+  const sevenDaysOut = new Date()
+  sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
+  const sevenDaysOutStr = sevenDaysOut.toISOString().split('T')[0]
 
-    // Pipeline changes (investors added or moved this week)
-    const recentInvestors = data.investors.filter(i => {
-      const created = new Date(i.created_at)
-      return created >= weekAgo
+  const upcomingFollowUps = contacts
+    .filter(c => c.next_follow_up && c.next_follow_up >= today && c.next_follow_up <= sevenDaysOutStr)
+    .sort((a, b) => a.next_follow_up.localeCompare(b.next_follow_up))
+    .slice(0, 5)
+
+  // Recent incomplete actions
+  const recentActions = actions
+    .filter(a => a.status !== 'Complete')
+    .sort((a, b) => {
+      if (a.due && b.due) return a.due.localeCompare(b.due)
+      if (a.due) return -1
+      if (b.due) return 1
+      return new Date(b.created_at) - new Date(a.created_at)
     })
-
-    // Meetings
-    const completedMeetings = data.meetings.filter(m => {
-      const meetingDate = new Date(m.date)
-      return meetingDate >= weekAgo && meetingDate <= today
-    })
-    const upcomingMeetings = data.meetings.filter(m => {
-      const meetingDate = new Date(m.date)
-      return meetingDate > today
-    })
-
-    // Top engaged investors (Engaged, In Diligence, Term Sheet stages)
-    const engagedInvestors = data.investors.filter(i =>
-      ['Engaged', 'In Diligence', 'Term Sheet', 'Closing'].includes(i.stage)
-    ).slice(0, 5)
-
-    // Risks/blockers from incomplete weekly actions
-    const pendingActions = (data.weeklyActions || []).filter(a => a.status !== 'Complete')
-
-    const report = `Weekly Report 📊
-Generated: ${today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-KEY METRICS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Total Investors: ${totalInvestors}
-• Active Pipeline: ${activeInvestors}
-• In Diligence: ${inDiligence}
-• Term Sheets: ${termSheetCount}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PIPELINE CHANGES THIS WEEK
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${recentInvestors.length > 0
-  ? recentInvestors.map(i => `• ${i.firm} (${i.stage})`).join('\n')
-  : '• No new investors added this week'}
-
-Pipeline by Stage:
-${STAGES.filter(s => s !== 'Passed').map(stage => `  ${stage}: ${getStageCount(stage)}`).join('\n')}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MEETINGS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Completed This Week: ${completedMeetings.length}
-${completedMeetings.length > 0
-  ? completedMeetings.map(m => `  • ${m.firm} - ${m.type} (${new Date(m.date).toLocaleDateString()})`).join('\n')
-  : '  • None'}
-
-Scheduled Upcoming: ${upcomingMeetings.length}
-${upcomingMeetings.length > 0
-  ? upcomingMeetings.slice(0, 5).map(m => `  • ${m.firm} - ${m.type} (${new Date(m.date).toLocaleDateString()})`).join('\n')
-  : '  • None scheduled'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TOP ENGAGED INVESTORS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${engagedInvestors.length > 0
-  ? engagedInvestors.map(i => `• ${i.firm}${i.partner ? ` (${i.partner})` : ''} - ${i.stage}${i.tier ? ` [Tier ${i.tier}]` : ''}`).join('\n')
-  : '• No investors in engaged stages yet'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-RISKS & BLOCKERS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${pendingActions.length > 0
-  ? pendingActions.map(a => `• ${a.action}${a.owner ? ` (${a.owner})` : ''}${a.due ? ` - Due: ${a.due}` : ''}`).join('\n')
-  : '• No pending action items'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`
-    return report
-  }
-
-  const copyReport = async () => {
-    const report = generateReport()
-    try {
-      await navigator.clipboard.writeText(report)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
+    .slice(0, 5)
 
   return (
     <div className="space-y-4">
       {/* Action Buttons */}
-      <div className="flex justify-end space-x-4">
+      <div className="flex justify-end">
         <button
-          onClick={() => setShowReportModal(true)}
-          className="flex items-center space-x-1 text-sm text-purple-600 hover:text-purple-800 font-medium"
-        >
-          <FileText size={16} />
-          <span>Weekly Report 📊</span>
-        </button>
-        <button
-          onClick={() => exportToCSV('investors')}
+          onClick={() => exportToCSV('contacts')}
           className="flex items-center space-x-1 text-sm text-slate-600 hover:text-slate-800"
         >
           <Download size={16} />
-          <span>Export Pipeline</span>
+          <span>Export Contacts</span>
         </button>
       </div>
-
-      {/* Weekly Report Modal */}
-      {showReportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold text-slate-800">Weekly Report Generator 📊</h2>
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-auto p-4">
-              <p className="text-sm text-slate-500 mb-3">
-                Auto-generated board update with key metrics. Copy and paste into your preferred communication channel.
-              </p>
-              <pre className="bg-slate-50 border rounded-lg p-4 text-sm text-slate-700 whitespace-pre-wrap font-mono overflow-auto max-h-[50vh]">
-                {generateReport()}
-              </pre>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end space-x-3 p-4 border-t bg-slate-50 rounded-b-xl">
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
-              >
-                Close
-              </button>
-              <button
-                onClick={copyReport}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  copied
-                    ? 'bg-green-500 text-white'
-                    : 'bg-purple-600 text-white hover:bg-purple-700'
-                }`}
-              >
-                {copied ? (
-                  <>
-                    <CheckCircle size={16} />
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy size={16} />
-                    <span>Copy to Clipboard</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -224,38 +100,22 @@ ${pendingActions.length > 0
         ))}
       </div>
 
-      {/* Timeline */}
+      {/* Pipeline Value by Stage */}
       <div className="bg-white rounded-lg p-4 shadow-sm border">
-        <h2 className="text-sm font-semibold text-slate-700 mb-3">Timeline</h2>
-        <div className="flex items-center justify-between">
-          {timeline.map((t, i) => (
-            <React.Fragment key={t.phase}>
-              <div className={`flex-1 text-center p-2 rounded ${t.status === 'current' ? 'bg-slate-800 text-white' : 'bg-slate-100'}`}>
-                <p className="font-medium text-sm">{t.phase}</p>
-                <p className={`text-xs ${t.status === 'current' ? 'text-slate-300' : 'text-slate-500'}`}>{t.period}</p>
-              </div>
-              {i < timeline.length - 1 && <ArrowRight size={16} className="text-slate-300 mx-1 flex-shrink-0" />}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-
-      {/* Pipeline by Stage */}
-      <div className="bg-white rounded-lg p-4 shadow-sm border">
-        <h2 className="text-sm font-semibold text-slate-700 mb-3">Pipeline by Stage</h2>
+        <h2 className="text-sm font-semibold text-slate-700 mb-3">Pipeline Value by Stage</h2>
         <div className="space-y-2">
-          {STAGES.filter(s => s !== 'Passed').map(stage => {
-            const count = getStageCount(stage)
-            const total = data.investors.length || 1
-            const pct = (count / total) * 100
+          {pipelineByStage.map(({ stage, count, value }) => {
+            const pct = maxStageValue > 0 ? (value / maxStageValue) * 100 : 0
             return (
               <div key={stage} className="flex items-center text-xs">
-                <span className="w-20 text-slate-600 truncate">{stage}</span>
-                <div className="flex-1 mx-2 bg-slate-100 rounded-full h-4 overflow-hidden">
-                  <div 
-                    className={`h-full transition-all ${STAGE_COLORS[stage]}`} 
-                    style={{ width: `${Math.max(pct, count > 0 ? 8 : 0)}%` }} 
-                  />
+                <span className="w-24 text-slate-600 truncate">{stage}</span>
+                <div className="flex-1 mx-2 bg-slate-100 rounded-full h-5 overflow-hidden">
+                  <div
+                    className={`h-full transition-all flex items-center px-2 ${STAGE_COLORS[stage]}`}
+                    style={{ width: `${Math.max(pct, count > 0 ? 8 : 0)}%` }}
+                  >
+                    {value > 0 && <span className="text-xs font-medium text-slate-700 whitespace-nowrap">{formatCurrency(value)}</span>}
+                  </div>
                 </div>
                 <span className="w-6 text-right font-medium text-slate-700">{count}</span>
               </div>
@@ -264,43 +124,93 @@ ${pendingActions.length > 0
         </div>
       </div>
 
-      {/* Recent Actions Summary */}
+      {/* Two-column: Needs Attention + Upcoming Follow-ups */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Needs Attention */}
+        <div className="bg-white rounded-lg p-4 shadow-sm border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={14} className="text-amber-500" />
+              <h2 className="text-sm font-semibold text-slate-700">Needs Attention</h2>
+            </div>
+            {onNavigateToPipeline && (
+              <button
+                onClick={onNavigateToPipeline}
+                className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+              >
+                View All
+                <ChevronRight size={14} />
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {needsAttention.length === 0 ? (
+              <p className="text-slate-400 text-sm text-center py-2">All contacts are on track!</p>
+            ) : (
+              needsAttention.map(c => (
+                <div key={c.id} className="flex items-center space-x-2 p-2 bg-amber-50 rounded text-sm">
+                  <span className="flex-shrink-0 w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="flex-1 truncate text-slate-700">
+                    {c.name}{c.company ? ` (${c.company})` : ''}
+                  </span>
+                  <span className="text-xs text-amber-600 flex-shrink-0">
+                    {c.next_follow_up && c.next_follow_up < today ? `Overdue: ${c.next_follow_up}` : 'No follow-up set'}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Upcoming Follow-ups */}
+        <div className="bg-white rounded-lg p-4 shadow-sm border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <CalendarClock size={14} className="text-blue-500" />
+              <h2 className="text-sm font-semibold text-slate-700">Upcoming Follow-ups</h2>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {upcomingFollowUps.length === 0 ? (
+              <p className="text-slate-400 text-sm text-center py-2">No follow-ups this week</p>
+            ) : (
+              upcomingFollowUps.map(c => (
+                <div key={c.id} className="flex items-center space-x-2 p-2 bg-blue-50 rounded text-sm">
+                  <span className={`flex-shrink-0 w-2 h-2 rounded-full ${c.next_follow_up === today ? 'bg-orange-400' : 'bg-blue-400'}`} />
+                  <span className="flex-1 truncate text-slate-700">
+                    {c.name}{c.company ? ` (${c.company})` : ''}
+                  </span>
+                  <span className={`text-xs flex-shrink-0 ${c.next_follow_up === today ? 'text-orange-600 font-medium' : 'text-blue-600'}`}>
+                    {c.next_follow_up === today ? 'Today' : c.next_follow_up}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Actions */}
       <div className="bg-white rounded-lg p-4 shadow-sm border">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-700">Last 5 actions added</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Recent Actions</h2>
           {onNavigateToActions && (
             <button
               onClick={onNavigateToActions}
               className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
             >
-              View All ({(data.weeklyActions || []).length})
+              View All ({actions.length})
               <ChevronRight size={14} />
             </button>
           )}
         </div>
         <div className="space-y-2">
-          {(() => {
-            const incomplete = (data.weeklyActions || [])
-              .filter(a => a.status !== 'Complete')
-              .sort((a, b) => {
-                if (a.due && b.due) return a.due.localeCompare(b.due)
-                if (a.due) return -1
-                if (b.due) return 1
-                return new Date(b.created_at) - new Date(a.created_at)
-              })
-              .slice(0, 5)
-            const today = new Date().toISOString().split('T')[0]
-
-            if (incomplete.length === 0) {
-              const hasActions = (data.weeklyActions || []).length > 0
-              return (
-                <p className="text-slate-400 text-sm text-center py-2">
-                  {hasActions ? 'All actions completed!' : 'No actions yet.'}
-                </p>
-              )
-            }
-
-            return incomplete.map(action => (
+          {recentActions.length === 0 ? (
+            <p className="text-slate-400 text-sm text-center py-2">
+              {actions.length > 0 ? 'All actions completed!' : 'No actions yet.'}
+            </p>
+          ) : (
+            recentActions.map(action => (
               <div key={action.id} className="flex items-center space-x-2 p-2 bg-slate-50 rounded text-sm">
                 <span className={`flex-shrink-0 w-2 h-2 rounded-full ${action.due && action.due < today ? 'bg-red-500' : 'bg-slate-300'}`} />
                 <span className="flex-1 truncate text-slate-700">{action.action}</span>
@@ -311,30 +221,7 @@ ${pendingActions.length > 0
                 )}
               </div>
             ))
-          })()}
-        </div>
-      </div>
-
-      {/* Stage Gate Reminders */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <h3 className="font-medium text-amber-800 text-sm mb-2">Stage Gate Reminders</h3>
-        <div className="grid grid-cols-2 gap-2 text-xs text-amber-700">
-          <div className="flex items-start space-x-1">
-            <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-            <span><strong>G1:</strong> 5 days to respond</span>
-          </div>
-          <div className="flex items-start space-x-1">
-            <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-            <span><strong>G2:</strong> 7 days to schedule</span>
-          </div>
-          <div className="flex items-start space-x-1">
-            <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-            <span><strong>G3:</strong> 10 days for deep dive</span>
-          </div>
-          <div className="flex items-start space-x-1">
-            <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-            <span><strong>G4:</strong> 3 weeks diligence</span>
-          </div>
+          )}
         </div>
       </div>
     </div>
