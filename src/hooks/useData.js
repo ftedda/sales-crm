@@ -297,10 +297,16 @@ export function useData(userId, orgId) {
     const tableData = data[tableName]
     if (!tableData?.length) return
 
+    const safeCSVField = (val) => {
+      const s = String(val ?? '').replace(/"/g, '""')
+      if (/^[=+@\-]/.test(s)) return `"'${s}"`
+      return `"${s}"`
+    }
+
     const headers = Object.keys(tableData[0])
     const csv = [
       headers.join(','),
-      ...tableData.map(row => headers.map(h => `"${row[h] || ''}"`).join(','))
+      ...tableData.map(row => headers.map(h => safeCSVField(row[h])).join(','))
     ].join('\n')
 
     const blob = new Blob([csv], { type: 'text/csv' })

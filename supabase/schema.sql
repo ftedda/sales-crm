@@ -162,7 +162,7 @@ create policy "authenticated_update_contacts" on public.contacts
   with check (public.is_org_member(org_id) and user_id = auth.uid());
 create policy "authenticated_delete_contacts" on public.contacts
   for delete to authenticated
-  using (public.is_org_member(org_id));
+  using (public.is_org_member(org_id) and user_id = auth.uid());
 
 -- contact_activities (CRUD with user_id enforcement)
 create policy "authenticated_select_contact_activities" on public.contact_activities
@@ -177,7 +177,7 @@ create policy "authenticated_update_contact_activities" on public.contact_activi
   with check (public.is_org_member(org_id) and user_id = auth.uid());
 create policy "authenticated_delete_contact_activities" on public.contact_activities
   for delete to authenticated
-  using (public.is_org_member(org_id));
+  using (public.is_org_member(org_id) and user_id = auth.uid());
 
 -- weekly_actions (CRUD with user_id enforcement)
 create policy "authenticated_select_weekly_actions" on public.weekly_actions
@@ -192,7 +192,7 @@ create policy "authenticated_update_weekly_actions" on public.weekly_actions
   with check (public.is_org_member(org_id) and user_id = auth.uid());
 create policy "authenticated_delete_weekly_actions" on public.weekly_actions
   for delete to authenticated
-  using (public.is_org_member(org_id));
+  using (public.is_org_member(org_id) and user_id = auth.uid());
 
 -- ============================================================
 -- Indexes
